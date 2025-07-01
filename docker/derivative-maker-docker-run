@@ -88,15 +88,13 @@ while true; do
       GIT="1"
       shift
       ;;
-    -m|--mount)
-      if [[ "${2}" =~ [/.]+ && "${3}" =~ [/.]+ ]]; then
-        BINARY_VOLUME="${2}"
-        CACHER_VOLUME="${3}"
-        shift 3
-      else
-        print_usage
-        exit 1
-      fi
+    --binary-mount)
+      BINARY_VOLUME="${2}"
+      shift 2
+      ;;
+    --cacher-mount)
+      CACHER_VOLUME="${2}"
+      shift 2
       ;;
     -h|--help)
       print_usage
