@@ -61,7 +61,6 @@ volume_prepare() {
 build_docker_image() {
   if [ -z "$(docker images --quiet -- "${IMG}" 2> /dev/null)" ]; then
     sudo \
-    --non-interactive \
     -- \
       docker \
         build \
@@ -117,10 +116,9 @@ build_docker_image
 
 volume_prepare
 
-sudo --non-interactive -- modprobe -a loop dm_mod
+sudo -- modprobe -a loop dm_mod
 
 sudo \
-  --non-interactive \
   -- \
     docker \
       run \
