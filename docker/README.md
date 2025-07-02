@@ -56,6 +56,7 @@ With the convenience of a debian:bookworm docker container, `derivative-maker-do
 
 |  Option     | Description              | Sample Value
 | ------------| -------------------------|------------|
+| `--update-repo` | Update the repo before building |
 | `--tag`, `-t` | Build a specific tag of your choosing | 17.3.9.9-stable
 | `--build-step`, `-b` | Allow execution of a specifc build-step |2800_create-lb-iso
 | `--custom`, `-c` | Run a custom command inside the container | /bin/bash
@@ -65,11 +66,11 @@ With the convenience of a debian:bookworm docker container, `derivative-maker-do
 #### Sample Commands
 1. Build with a custom tag
    ```sh
-   ./derivative-maker-docker-run -t 17.3.9.9-stable -- <build arguments>
+   ./derivative-maker-docker-run --update-repo -t 17.3.9.9-stable -- <build arguments>
    ```
 2. Execute specific build-steps
    ```sh
-   ./derivative-maker-docker-run -t 17.3.9.9-stable -b 2800_create-lb-iso -- <build arguments>
+   ./derivative-maker-docker-run --update-repo -t 17.3.9.9-stable -b 2800_create-lb-iso -- <build arguments>
    ```
 3. Running a custom command
    ```sh
@@ -77,7 +78,7 @@ With the convenience of a debian:bookworm docker container, `derivative-maker-do
    ```
 4. Choose custom volume mount points
    ```sh
-   ./derivative-maker-docker-run -t 17.3.9.9-stable --binary-mount /home/user/whonix/dm-binary --cacher-mount /home/user/whonix/apt-cache -- <build arguments>
+   ./derivative-maker-docker-run --update-repo -t 17.3.9.9-stable --binary-mount /home/user/whonix/dm-binary --cacher-mount /home/user/whonix/apt-cache -- <build arguments>
    ```
   + The first argument denotes the binary volume while the second refers to apt-cacher
 #### Hints

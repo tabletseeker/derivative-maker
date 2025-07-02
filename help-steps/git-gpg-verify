@@ -62,7 +62,9 @@ run_git() {
     error "Do not run this as root!"
   fi
   ## only fetches tags
-  git fetch https://github.com/derivative-maker/derivative-maker --depth=1 -- 'refs/tags/*:refs/tags/*'
+  if [ "${UPDATE_REPO}" = '1' ]; then
+    git fetch https://github.com/derivative-maker/derivative-maker --depth=1 -- 'refs/tags/*:refs/tags/*'
+  fi
 
   latest_git_tag="$(git rev-list --tags --max-count=1)"
 
@@ -78,8 +80,10 @@ run_git() {
   signed_by_fingerprint "${TAG}^{commit}"
 
   if [ -z "$(git status --porcelain 2>/dev/null)" ]; then
-    git pull
-    git checkout "${TAG}"
+    if [ "${UPDATE_REPO}" = '1' ]; then
+      git pull
+      git checkout "${TAG}"
+    fi
   else
     true "INFO: Uncommitted changes found. Skipping upstream merge."
     if [ -n "${GIT}" ]; then
@@ -94,9 +98,15 @@ run_git() {
     fi
   fi
 
-  git submodule sync --recursive >/dev/null
+  if [ "${UPDATE_REPO}" = '1' ]; then
+    ## TODO: This code is probably needed to properly check out a tag, but it
+    ## will also pull new code from upstream. We must have a way to do the two
+    ## operations separately so that we can check out an existing tag without
+    ## pulling new code.
+    git submodule sync --recursive >/dev/null
 
-  git -c merge.verifySignatures=true submodule update --init --recursive --jobs=200 --merge >/dev/null
+    git -c merge.verifySignatures=true submodule update --init --recursive --jobs=200 --merge >/dev/null
+  fi
 
   git status
 }
