@@ -218,3 +218,58 @@ hw+hmoRcoInpxWeP
 =ZO9v
 -----END PGP PUBLIC KEY BLOCK-----
 """
+
+[authorization."tabletseeker <tabletseeker@github.com>"]
+sign_commit = true
+sign_tag = true
+sign_archive = true
+add_user = true
+retire_user = true
+audit = true
+keyring = """
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Comment: F624 548E F346 DC78 33FE  17C7 4932 FC29 BA61 2D21
+Comment: tabletseeker <tabletseeker-git@protonmail.com>
+Comment: tabletseeker <tabletseeker@github.com>
+
+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
+x15+hH4UaNiokXAm6hz08dTIq+hWXtGCdkU=
+=dAjr
+-----END PGP PUBLIC KEY BLOCK-----
+"""
