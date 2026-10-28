@@ -94,7 +94,7 @@ parse_args() {
 
     COMMAND="${1}"
     shift
-    COMMAND_ARGS="${@:-}"
+    COMMAND_ARGS=("${@}")
 }
 
 validate_mount_path() {
@@ -197,5 +197,9 @@ sudo ${ENGINE} exec "${tty_opts[@]}" \
   --env "flavor_meta_packages_to_install=${flavor_meta_packages_to_install:-}" \
   --env "install_package_list=${install_package_list:-}" \
   --env "DERIVATIVE_APT_REPOSITORY_OPTS=${DERIVATIVE_APT_REPOSITORY_OPTS:-}" \
+  --env "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
+  --env "CHOSEN_VERSION=${CHOSEN_VERSION}" \
+  --env "DEBFULLNAME=tabletseeker-ci" \
+  --env "DEBEMAIL=tabletseeker-ci@github.com" \
   "${CONTAINER_INSTANCE_NAME}" \
-  "${COMMAND}" ${COMMAND_ARGS}
+  "${COMMAND}" "${COMMAND_ARGS[@]}"

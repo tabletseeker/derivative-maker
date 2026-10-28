@@ -12,12 +12,9 @@ SOURCE_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$( dirname -- "${SOURCE_DIR}" )"
 OCI_USER="user"
 PRIVATE_KEY_PATH="${PRIVATE_KEY_PATH:-/home/${OCI_USER}/.local/share/my-private-key.asc}"
-DEBFULLNAME="${DEBFULLNAME:-tabletseeker-ci}"
-DEBEMAIL="${DEBEMAIL:-tabletseeker-ci@github.com}"
-GIT_GITHUB_EMAIL="${GIT_GITHUB_EMAIL:-tabletseeker-ci-git@protonmail.com}"
+GIT_GITHUB_EMAIL="${GIT_GITHUB_EMAIL:-tabletseeker-ci@protonmail.com}"
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-tabletseeker/derivative-maker}"
-USER_BUILDCONFIG_DIR="/home/${OCI_USER}/buildconfig.d"
-GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+SIGNIFY_DIR="/home/${OCI_USER}/.signify"
 
 cd "${REPO_ROOT}"
 
@@ -25,7 +22,7 @@ cd "${REPO_ROOT}"
 if [[ -n "${CHOSEN_VERSION:-}" ]]; then
   RELEASE_VERSION="${CHOSEN_VERSION}"
 else
-  RELEASE_VERSION="$(dpkg-parsechangelog --show-field=Version | cut -d'-' -f1)"
+  RELEASE_VERSION="$(dpkg-parsechangelog --show-field=Version | sed 's/.*://;s/-.*//')"
   if [[ -z "${RELEASE_VERSION}" ]]; then
     RELEASE_VERSION="unknown"
   fi
@@ -76,14 +73,17 @@ fi
 sq pki link add --cert "${GPG_FINGERPRINT}" --email "${DEBEMAIL}" || true
 sq pki link add --cert "${GPG_FINGERPRINT}" --email "${GIT_GITHUB_EMAIL}" || true
 
-# Populate for help-steps
-mkdir -p "${USER_BUILDCONFIG_DIR}"
-printf 'signing_key_email="%s"\n' "${DEBEMAIL}" > "${USER_BUILDCONFIG_DIR}/40_signing_key.conf"
+# Signify key creation - signing-key-create
+mkdir -p "${SIGNIFY_DIR}"
+chmod 700 "${SIGNIFY_DIR}"
 
-# Run upstream-style local key policy setup if available.
-if [[ -x "${REPO_ROOT}/help-steps/signing-key-create" ]]; then
-    echo "INFO: Running upstream project signing-key-create"
-    ./help-steps/signing-key-create
+if [[ ! -f "${SIGNIFY_DIR}/keyname.sec" ]]; then
+    echo "INFO: Generating local fork signify signing key..."
+    signify-openbsd -n -G \
+        -p "${SIGNIFY_DIR}/keyname.pub" \
+        -s "${SIGNIFY_DIR}/keyname.sec" \
+        -c "derivative-maker"
+    chmod 600 "${SIGNIFY_DIR}/keyname.sec"
 fi
 
 # Configure repo-local git with a valid identity.
@@ -99,15 +99,18 @@ if [[ -n "${GITHUB_TOKEN}" ]]; then
     "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" || true
 fi
 
-# This is the normal release tag path, not an amend.
-if git -C "${REPO_ROOT}" rev-parse --verify "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
-  echo "INFO: tag ${RELEASE_TAG} already exists locally; re-using it."
+echo "INFO: Locally creating signed tag ${RELEASE_TAG}"
+git -C "${REPO_ROOT}" tag -s -m "release: ${RELEASE_TAG}" "${RELEASE_TAG}"
+
+# Query the remote server to see if the tag exists upstream
+if git -C "${REPO_ROOT}" ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+  echo "INFO: tag ${RELEASE_TAG} already exists upstream. Fetching..."
 else
-  git -C "${REPO_ROOT}" tag -s -m "release: ${RELEASE_TAG}" "${RELEASE_TAG}"
-  echo "INFO: created signed tag ${RELEASE_TAG}"
+  echo "INFO: Pushing ${RELEASE_TAG} to origin"
+  git -C "${REPO_ROOT}" push origin "refs/tags/${RELEASE_TAG}"
 fi
 
-# Verify the tag itself.
+# Verify the tag.
 git -C "${REPO_ROOT}" tag -v "${RELEASE_TAG}"
 
 # Fail-fast repo signing health-check if the repository includes the helper.
@@ -116,13 +119,6 @@ cd "${REPO_ROOT}"
 if [[ -x "${REPO_ROOT}/help-steps/signing-key-test" ]]; then
     echo "INFO: Running signing-key-test"
     ./help-steps/signing-key-test
-fi
-
-# Only push the tag once.
-if [[ -n "${GITHUB_TOKEN}" ]]; then
-  if ! git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
-    git -C "${REPO_ROOT}" push origin "refs/tags/${RELEASE_TAG}"
-  fi
 fi
 
 echo "=== signing-setup: single native verification pass ==="

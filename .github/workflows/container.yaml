@@ -64,6 +64,12 @@ on:
         default: "podman"
         type: string
 
+      allow_untagged:
+        description: "Allow untagged"
+        required: true
+        default: false
+        type: boolean
+
       allow_uncommitted:
         description: "Allow uncommitted"
         required: true
@@ -79,7 +85,7 @@ on:
       version:
         description: "Release version code"
         required: false
-        default: "18.2.1.9"
+        default: "18.2.4.3"
         type: string
 
       flavor_meta_packages_to_install:
@@ -113,19 +119,21 @@ jobs:
       BUILD_TARGET: ${{ inputs.target }}
       BUILD_TYPE: ${{ inputs.type }}
       BUILD_FRESHNESS: ${{ inputs.freshness }}
+      ALLOW_UNTAGGED: ${{ inputs.allow_untagged }}
       ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
       ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
       ENGINE: ${{ inputs.container_engine }}
-      FLAVOR_META_PACKAGES: ${{ inputs.flavor_meta_packages_to_install }}
-      INSTALL_PACKAGE_LIST: ${{ inputs.install_package_list }}
       DERIVATIVE_APT_REPOSITORY_OPTS: ${{ inputs.derivative_apt_repository_opts }}
       CHOSEN_VERSION: ${{ inputs.version }}
+      flavor_meta_packages: ${{ inputs.flavor_meta_packages_to_install }}
+      install_package_list: ${{ inputs.install_package_list }}
 
     steps:
 
       - name: Checkout Repository Core and History
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
           fetch-tags: true
           submodules: false
