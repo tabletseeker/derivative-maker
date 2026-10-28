@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+
+set -x
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+SOURCE_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT="$( dirname -- "${SOURCE_DIR}" )"
+OCI_USER="user"
+PRIVATE_KEY_PATH="${PRIVATE_KEY_PATH:-/home/${OCI_USER}/.local/share/my-private-key.asc}"
+DEBFULLNAME="${DEBFULLNAME:-tabletseeker-ci}"
+DEBEMAIL="${DEBEMAIL:-tabletseeker-ci@github.com}"
+GIT_GITHUB_EMAIL="${GIT_GITHUB_EMAIL:-tabletseeker-ci-git@protonmail.com}"
+GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-tabletseeker/derivative-maker}"
+USER_BUILDCONFIG_DIR="/home/${OCI_USER}/buildconfig.d"
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+
+cd "${REPO_ROOT}"
+
+# Prefer a release version from a user-provided value; otherwise use the latest tag or a fallback.
+if [[ -n "${CHOSEN_VERSION:-}" ]]; then
+  RELEASE_VERSION="${CHOSEN_VERSION}"
+else
+  RELEASE_VERSION="$(dpkg-parsechangelog --show-field=Version | cut -d'-' -f1)"
+  if [[ -z "${RELEASE_VERSION}" ]]; then
+    RELEASE_VERSION="unknown"
+  fi
+fi
+
+RELEASE_TAG="${RELEASE_TAG:-${RELEASE_VERSION}-nightly}"
+
+echo "INFO: release tag = ${RELEASE_TAG}"
+echo "INFO: repo = ${REPO_ROOT}"
+
+if ! git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "CRITICAL ERROR: ${REPO_ROOT} is not a valid git work tree." >&2
+  exit 1
+fi
+
+if [[ ! -f "${PRIVATE_KEY_PATH}" ]]; then
+  echo "CRITICAL ERROR: signing key asset missing at ${PRIVATE_KEY_PATH}" >&2
+  exit 1
+fi
+
+# Worktree safety check. If you want to allow dirty trees, make this explicit and controlled.
+if [[ "${ALLOW_UNCOMMITTED:-false}" != "true" ]]; then
+  if ! git -C "${REPO_ROOT}" diff --quiet --ignore-submodules --exit-code; then
+    echo "CRITICAL ERROR: repo is dirty; refusing to create a release tag." >&2
+    git -C "${REPO_ROOT}" status --short >&2 || true
+    exit 1
+  fi
+fi
+
+# Import the private key into gpg. This is a local keyring operation, not a repo mutation.
+gpg --batch --import "${PRIVATE_KEY_PATH}"
+
+# Sequoia import if available.
+if command -v sq >/dev/null 2>&1; then
+  sq key import "${PRIVATE_KEY_PATH}" || true
+  sq cert import "${PRIVATE_KEY_PATH}" || true
+fi
+
+# Resolve fingerprint used by the project.
+GPG_FINGERPRINT="$(gpg --list-secret-keys --with-colons "${DEBEMAIL}" 2>/dev/null | awk -F: '$1=="fpr" { print $10; exit }')"
+
+if [[ -z "${GPG_FINGERPRINT}" ]]; then
+  echo "CRITICAL ERROR: could not resolve GPG fingerprint for ${DEBEMAIL}" >&2
+  exit 1
+fi
+
+# Link the cert to the relevant identities in the Sequoia keystore.
+sq pki link add --cert "${GPG_FINGERPRINT}" --email "${DEBEMAIL}" || true
+sq pki link add --cert "${GPG_FINGERPRINT}" --email "${GIT_GITHUB_EMAIL}" || true
+
+# Populate for help-steps
+mkdir -p "${USER_BUILDCONFIG_DIR}"
+printf 'signing_key_email="%s"\n' "${DEBEMAIL}" > "${USER_BUILDCONFIG_DIR}/40_signing_key.conf"
+
+# Run upstream-style local key policy setup if available.
+if [[ -x "${REPO_ROOT}/help-steps/signing-key-create" ]]; then
+    echo "INFO: Running upstream project signing-key-create"
+    ./help-steps/signing-key-create
+fi
+
+# Configure repo-local git with a valid identity.
+git -C "${REPO_ROOT}" config user.name "${DEBFULLNAME}"
+git -C "${REPO_ROOT}" config user.email "${DEBEMAIL}"
+git -C "${REPO_ROOT}" config gpg.program "$(command -v gpg || true)"
+git -C "${REPO_ROOT}" config user.signingkey "${GPG_FINGERPRINT}"
+git -C "${REPO_ROOT}" config commit.gpgsign true
+git -C "${REPO_ROOT}" config tag.gpgSign true
+
+if [[ -n "${GITHUB_TOKEN}" ]]; then
+  git -C "${REPO_ROOT}" remote set-url origin \
+    "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" || true
+fi
+
+# This is the normal release tag path, not an amend.
+if git -C "${REPO_ROOT}" rev-parse --verify "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+  echo "INFO: tag ${RELEASE_TAG} already exists locally; re-using it."
+else
+  git -C "${REPO_ROOT}" tag -s -m "release: ${RELEASE_TAG}" "${RELEASE_TAG}"
+  echo "INFO: created signed tag ${RELEASE_TAG}"
+fi
+
+# Verify the tag itself.
+git -C "${REPO_ROOT}" tag -v "${RELEASE_TAG}"
+
+# Fail-fast repo signing health-check if the repository includes the helper.
+cd "${REPO_ROOT}"
+
+if [[ -x "${REPO_ROOT}/help-steps/signing-key-test" ]]; then
+    echo "INFO: Running signing-key-test"
+    ./help-steps/signing-key-test
+fi
+
+# Only push the tag once.
+if [[ -n "${GITHUB_TOKEN}" ]]; then
+  if ! git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+    git -C "${REPO_ROOT}" push origin "refs/tags/${RELEASE_TAG}"
+  fi
+fi
+
+echo "=== signing-setup: single native verification pass ==="
+# Upstream-style validation gate after sign-and-tag.
+./help-steps/git_sanity_test --mode all --context "main repo"
+
+echo "INFO: signing setup complete."
+echo "INFO: tag present: ${RELEASE_TAG}"
+echo "INFO: signing key fingerprint: ${GPG_FINGERPRINT}"

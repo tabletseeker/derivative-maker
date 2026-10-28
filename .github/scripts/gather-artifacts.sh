@@ -1,85 +1,67 @@
 #!/usr/bin/env bash
-set -e
 
-# Automatically fall back to native runner path if GITHUB_WORKSPACE environment variable is populated
+set -x
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
+ARTIFACT_DIR="${WORKSPACE_DIR}/extracted-binaries"
+STAGING_DIR="${WORKSPACE_DIR}/release-staging"
+REPO_ROOT="${REPO_ROOT:-${WORKSPACE_DIR}}"
 
-# Ensure workspace locations exist cleanly
-rm -rf "${WORKSPACE_DIR}/extracted-binaries" "${WORKSPACE_DIR}/release-staging"
-mkdir -p "${WORKSPACE_DIR}/extracted-binaries" "${WORKSPACE_DIR}/release-staging"
+mkdir -p "${ARTIFACT_DIR}" "${STAGING_DIR}"
 
-echo "=== 2. Streaming build artifacts out of QEMU guest ==="
-ssh -i ./id_ed25519 -p 2222 -o StrictHostKeyChecking=no debian@127.0.0.1 "tar -cf - -C /home/debian/binary_mnt ." | tar -xf - -C "${WORKSPACE_DIR}/extracted-binaries"
+echo "=== Streaming build artifacts out of the guest ==="
+ssh -i ./id_ed25519 -p 2222 -o StrictHostKeyChecking=no debian@127.0.0.1 \
+  "tar -cf - -C /home/debian/binary_mnt ." | \
+  tar -xf - -C "${ARTIFACT_DIR}"
 
-cd "${WORKSPACE_DIR}/extracted-binaries"
+echo "=== Copy only release artifacts into the staging directory ==="
+find "${ARTIFACT_DIR}" -type f -regextype posix-extended \
+  -regex '.*(Kicksecure.*\.xz|Whonix.*\.xz|\.(iso|raw|qcow2|ova|asc|sig|torrent))$' \
+  -exec cp -n -t "${STAGING_DIR}/" {} +
 
-echo "=== Fix ownership of container-created build artifacts ==="
-sudo chown -R runner:runner .
+echo "=== Generate SHA256SUMS ==="
+cd "${STAGING_DIR}"
+find . -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 | xargs -0 sha256sum > SHA256SUMS || true
+cat SHA256SUMS || true
 
-echo "=== 3. Filtering and Staging Core Release Images ==="
-find . -type f  -name "Kicksecure*.xz" -o -name "Whonix*.xz" -o -name "*.iso" -o -name "*.raw" -o -name "*.qcow2" -o -name "*.ova" -o -name "*.asc" -o -name "*.sig" -o -name "*.torrent"  | while read -r FILE; do
-  echo "Staging core asset: $(basename "$FILE")"
-  mv "$FILE" "${WORKSPACE_DIR}/release-staging/"
-done
-
-cd "${WORKSPACE_DIR}/release-staging"
-
-echo "=== 4. Generating Cryptographic Checksums ==="
-sha256sum * > SHA256SUMS || true
-cat SHA256SUMS
-
-echo "=== 5. Dynamic Asset Inspection and Splitting Loop ==="
-find . -maxdepth 1 -type f ! -name "SHA256SUMS" | while read -r ASSET; do
-  FILE_SIZE_MB=$(du -m "$ASSET" | cut -f1)
-
-  if [ "$FILE_SIZE_MB" -gt 2000 ]; then
-    echo "Asset '$ASSET' ($FILE_SIZE_MB MB) crosses the 2GB endpoint threshold."
-    echo "Dynamically splitting into safe 1500M chunks..."
-    split -b 1500M "$ASSET" "${ASSET}.part_"
-    rm "$ASSET"
-  else
-    echo "Asset '$ASSET' ($FILE_SIZE_MB MB) is safely below the 2GB threshold. Leaving whole."
+echo "=== Split oversized files to respect release limits ==="
+cd "${STAGING_DIR}"
+find . -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 | while IFS= read -r -d '' ASSET; do
+FILE_SIZE_MB="$(du -m "${ASSET}" | cut -f1)"
+  if [ "${FILE_SIZE_MB}" -gt 2000 ]; then
+    echo "Asset '${ASSET}' (${FILE_SIZE_MB} MB) exceeds 2GB threshold; splitting."
+    split -b 1500M "${ASSET}" "${ASSET}.part_"
+    rm -f "${ASSET}"
   fi
 done
 
-echo "=== 6. Establishing Dynamic Release Tags and Notes Matrix ==="
-case "$BUILD_FLAVOR" in
+echo "=== Prepare release metadata ==="
+case "${BUILD_FLAVOR:-}" in
   "kicksecure-lxqt") FLAVOR_NAME="Kicksecure-LXQt" ;;
-  "kicksecure-cli")  FLAVOR_NAME="Kicksecure-CLI" ;;
-  "whonix-gateway-xfce") FLAVOR_NAME="Whonix-Gateway-XFCE" ;;
-  "whonix-workstation-xfce") FLAVOR_NAME="Whonix-Workstation-XFCE" ;;
+  "kicksecure-cli") FLAVOR_NAME="Kicksecure-CLI" ;;
+  "whonix-gateway-lxqt") FLAVOR_NAME="Whonix-Gateway-LXQt" ;;
+  "whonix-workstation-lxqt") FLAVOR_NAME="Whonix-Workstation-LXQt" ;;
   *) FLAVOR_NAME="Derivative-Image" ;;
 esac
 
-if [ "$BUILD_ARCH" = "amd64" ]; then
+if [ "${BUILD_ARCH:-amd64}" = "amd64" ]; then
   ARCH_NAME="Intel_AMD64"
 else
-  ARCH_NAME="$BUILD_ARCH"
+  ARCH_NAME="Intel_x86"
 fi
 
-# Map dynamic table true/false configurations with requested color indicators
-if [ "$ALLOW_UNCOMMITTED" = "true" ]; then
-  GIT_CLEAN_STR="⚠️ Allowing Uncommitted"
-else
-  GIT_CLEAN_STR="✅ Clean Tree"
-fi
-
-if [ "$ALLOW_UNFROZEN" = "true" ]; then
-  FROZEN_SRC_STR="⚠️ Unfrozen Sources"
-else
-  FROZEN_SRC_STR="✅ Frozen Sources"
-fi
-
-# Clean up tags and safe presentation fallbacks
-RELEASE_TITLE="${FLAVOR_NAME} v${CHOSEN_VERSION} (${ARCH_NAME} ${BUILD_TARGET^^} ${BUILD_TYPE^^})"
-RELEASE_TAG="${CHOSEN_VERSION}-release"
-
-echo "Target Release Tag Resolved: $RELEASE_TAG"
-echo "Target Release Title Resolved: $RELEASE_TITLE"
-
-[ -n "$FLAVOR_META_PACKAGES" ] && META_ROW="| **Custom Meta Packages Added** | \`$FLAVOR_META_PACKAGES\` |"
-[ -n "$INSTALL_PACKAGE_LIST" ] && PKG_ROW="| **Appended Package List** | \`$INSTALL_PACKAGE_LIST\` |"
-[ -n "$DERIVATIVE_APT_OPTS" ] && APT_ROW="| **Custom APT Repository Flags** | \`$DERIVATIVE_APT_OPTS\` |"
+META_ROW=""
+PKG_ROW=""
+APT_ROW=""
+[ -n "${FLAVOR_META_PACKAGES:-}" ] && META_ROW="| **Custom Meta Packages Added** | \`$FLAVOR_META_PACKAGES\` |"
+[ -n "${INSTALL_PACKAGE_LIST:-}" ] && PKG_ROW="| **Appended Package List** | \`$INSTALL_PACKAGE_LIST\` |"
+[ -n "${DERIVATIVE_APT_OPTS:-}" ] && APT_ROW="| **Custom APT Repository Flags** | \`$DERIVATIVE_APT_OPTS\` |"
 
 {
   echo "### 🛠️ Build Manifest"
@@ -100,16 +82,34 @@ echo "Target Release Title Resolved: $RELEASE_TITLE"
   [ -n "$APT_ROW" ] && echo "$APT_ROW"
   echo ""
   echo "---"
-  echo "Automated system deployment binaries generated successfully. Verify your downloads using the attached SHA256SUMS file."
-} > release_notes.md
+  echo "Automated system deployment binaries generated successfully. Verify downloads using the attached SHA256SUMS file."
+} > "${WORKSPACE_DIR}/release_notes.md"
 
-echo "=== Final Layout Verification ==="
-ls -lh
+echo "=== Final workspace layout ==="
+ls -lh "${WORKSPACE_DIR}"
 
-echo "=== 7. Publishing Clean Master Release Bundle via GitHub API ==="
-gh release create "$RELEASE_TAG" \
-  --title "$RELEASE_TITLE" \
-  --notes-file release_notes.md \
+echo "INFO: Fetching newly created tag."
+git -C "${REPO_ROOT}" fetch origin --tags --force
+
+RELEASE_TAG="$(git -C "${REPO_ROOT}" describe --tags --abbrev=0 2>/dev/null || true)"
+RELEASE_TITLE="${FLAVOR_NAME} ${CHOSEN_VERSION:-unknown} (${ARCH_NAME} ${BUILD_TARGET^^:-unknown} ${BUILD_TYPE^^:-unknown})"
+
+if [[ -z "${RELEASE_TAG:-}" ]]; then
+  echo "CRITICAL ERROR: Failed to resolve a valid release tag from the Git repository!" >&2
+  echo "Aborting to prevent a corrupted or unsigned lightweight fallback release." >&2
+  exit 1
+fi
+
+echo "Target release tag resolved: ${RELEASE_TAG}"
+echo "Target release title resolved: ${RELEASE_TITLE}"
+
+# Create the GitHub release using the new tag.
+gh release create "${RELEASE_TAG}" \
+  --title "${RELEASE_TITLE}" \
+  --notes-file "${WORKSPACE_DIR}/release_notes.md" \
   --draft=false \
   --prerelease=false \
-  ./*
+  --target "${GITHUB_SHA:-$(git -C "${REPO_ROOT}" rev-parse HEAD)}" \
+  "${STAGING_DIR}"/*
+
+echo "=== Release creation complete. ==="
