@@ -194,12 +194,18 @@ sudo ${ENGINE} run "${tty_opts[@]}" "${oci_run_opts[@]}" \
 sudo ${ENGINE} exec "${tty_opts[@]}" \
   --workdir "/home/${OCI_USER}/derivative-maker" \
   --user "${OCI_USER}" \
-  --env "flavor_meta_packages_to_install=${flavor_meta_packages_to_install:-}" \
-  --env "install_package_list=${install_package_list:-}" \
   --env "DERIVATIVE_APT_REPOSITORY_OPTS=${DERIVATIVE_APT_REPOSITORY_OPTS:-}" \
   --env "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
   --env "CHOSEN_VERSION=${CHOSEN_VERSION:-}" \
-  --env "DEBFULLNAME=tabletseeker-ci" \
-  --env "DEBEMAIL=tabletseeker-ci@github.com" \
+  --env "DEBFULLNAME=${DEBFULLNAME:-}" \
+  --env "DEBEMAIL=${DEBEMAIL:-}" \
+  --env "flavor_meta_packages_to_install=${flavor_meta_packages_to_install:-}" \
+  --env "install_package_list=${install_package_list:-}" \
+  --env "flavors_list=${flavors_list:-}" \
+  --env "dist_build_target_arch=${dist_build_target_arch:-}" \
+  --env "dist_build_multi_target_list=${dist_build_multi_target_list:-}" \
+  --env "dist_build_version_type=${dist_build_version_type:-}" \
+  --env "dist_build_freshness=${dist_build_freshness:-}" \
+  --env "dist_build_redistributable=${dist_build_redistributable:-}" \
   "${CONTAINER_INSTANCE_NAME}" \
   "${COMMAND}" "${COMMAND_ARGS[@]}"

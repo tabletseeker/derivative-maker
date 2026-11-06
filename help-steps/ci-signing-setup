@@ -15,6 +15,11 @@ PRIVATE_KEY_PATH="${PRIVATE_KEY_PATH:-/home/${OCI_USER}/.local/share/my-private-
 GIT_GITHUB_EMAIL="${GIT_GITHUB_EMAIL:-tabletseeker-ci@protonmail.com}"
 GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-tabletseeker/derivative-maker}"
 SIGNIFY_DIR="/home/${OCI_USER}/.signify"
+DM_CONFIG_DIR="/home/${OCI_USER}/buildconfig.d"
+SSH_DIR="/home/${OCI_USER}/.ssh"
+
+mkdir -p "${SIGNIFY_DIR}" "${DM_CONFIG_DIR}" "${SSH_DIR}"
+chmod -R 700 "${SIGNIFY_DIR}" "${DM_CONFIG_DIR}" "${SSH_DIR}"
 
 cd "${REPO_ROOT}"
 
@@ -23,9 +28,6 @@ if [[ -n "${CHOSEN_VERSION:-}" ]]; then
   RELEASE_VERSION="${CHOSEN_VERSION}"
 else
   RELEASE_VERSION="$(dpkg-parsechangelog --show-field=Version | sed 's/.*://;s/-.*//')"
-  if [[ -z "${RELEASE_VERSION}" ]]; then
-    RELEASE_VERSION="unknown"
-  fi
 fi
 
 RELEASE_TAG="${RELEASE_TAG:-${RELEASE_VERSION}-nightly}"
@@ -74,9 +76,6 @@ sq pki link add --cert "${GPG_FINGERPRINT}" --email "${DEBEMAIL}" || true
 sq pki link add --cert "${GPG_FINGERPRINT}" --email "${GIT_GITHUB_EMAIL}" || true
 
 # Signify key creation - signing-key-create
-mkdir -p "${SIGNIFY_DIR}"
-chmod 700 "${SIGNIFY_DIR}"
-
 if [[ ! -f "${SIGNIFY_DIR}/keyname.sec" ]]; then
     echo "INFO: Generating local fork signify signing key..."
     signify-openbsd -n -G \
@@ -85,6 +84,14 @@ if [[ ! -f "${SIGNIFY_DIR}/keyname.sec" ]]; then
         -c "derivative-maker"
     chmod 600 "${SIGNIFY_DIR}/keyname.sec"
 fi
+
+# Buildconfig CI setup
+cat << EOF > "${DM_CONFIG_DIR}/30_ci-override.conf"
+#!/bin/bash
+
+export rsync_cmd="true"
+export signing_key_email="${DEBEMAIL:-}"
+EOF
 
 # Configure repo-local git with a valid identity.
 git -C "${REPO_ROOT}" config user.name "${DEBFULLNAME}"
