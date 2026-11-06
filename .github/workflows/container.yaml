@@ -1,24 +1,23 @@
-name: Derivative-Maker CI Release Pipeline
+name: Derivative Maker CI
 
 on:
   workflow_dispatch:
     inputs:
-      flavor:
-        description: "Target Flavor configuration"
-        required: true
-        default: "kicksecure-lxqt"
-        type: choice
-        options:
-          - "kicksecure-lxqt"
-          - "kicksecure-cli"
-          - "whonix-gateway-lxqt"
-          - "whonix-workstation-lxqt"
-          - "whonix-gateway-cli"
-          - "whonix-workstation-cli"
+      flavors_list:
+        description: "Flavor List"
+        required: false
+        default: "kicksecure-lxqt whonix-gateway-lxqt whonix-workstation-lxqt"
+        type: string
+
+      dist_build_multi_target_list:
+        description: "Target List"
+        required: false
+        default: ""
+        type: string
 
       arch:
         description: "Target CPU Architecture"
-        required: true
+        required: false
         default: "amd64"
         type: choice
         options:
@@ -27,7 +26,7 @@ on:
 
       target:
         description: "Build Target output wrapper format"
-        required: true
+        required: false
         default: "qcow2"
         type: choice
         options:
@@ -38,7 +37,7 @@ on:
 
       type:
         description: "System Footprint Environment Type"
-        required: true
+        required: false
         default: "vm"
         type: choice
         options:
@@ -49,36 +48,52 @@ on:
 
       freshness:
         description: "APT repository freshness profile"
-        required: true
+        required: false
         default: "frozen"
         type: choice
         options:
           - "frozen"
-          - "stable"
-          - "testers"
-          - "developers"
+          - "current"
 
       container_engine:
         description: "Container Engine running the build process"
-        required: true
+        required: false
         default: "podman"
-        type: string
+        type: choice
+        options:
+          - "podman"
+          - "docker"
+          - "nerdctl"
+          - "colima"
+          - "buildah"
+
+      dist_build_redistributable:
+        description: "Full release paradigm"
+        required: false
+        default: true
+        type: boolean
 
       allow_untagged:
         description: "Allow untagged"
-        required: true
+        required: false
         default: false
         type: boolean
 
       allow_uncommitted:
         description: "Allow uncommitted"
-        required: true
+        required: false
         default: false
         type: boolean
 
       allow_unfrozen:
         description: "Allow unfrozen sources"
-        required: true
+        required: false
+        default: false
+        type: boolean
+
+      remote_derivative_packages:
+        description: "Remote packages"
+        required: false
         default: false
         type: boolean
 
@@ -106,30 +121,56 @@ on:
         default: ""
         type: string
 
+      debfullname:
+        description: "Key owner identity"
+        required: false
+        default: "tabletseeker-ci"
+        type: string
+
+      debemail:
+        description: "Key owner e-mail"
+        required: false
+        default: "tabletseeker-ci@github.com"
+        type: string
+
+      release_flavor:
+        description: "Flavor release label"
+        required: false
+        default: ""
+        type: string
+
 jobs:
-  nested-vm-build:
+  dm-build-official:
+    name: DM Release Pipeline
     runs-on: ubuntu-latest
     environment: release-signing
     permissions:
       contents: write
 
     env:
-      BUILD_FLAVOR: ${{ inputs.flavor }}
-      BUILD_ARCH: ${{ inputs.arch }}
-      BUILD_TARGET: ${{ inputs.target }}
-      BUILD_TYPE: ${{ inputs.type }}
-      BUILD_FRESHNESS: ${{ inputs.freshness }}
-      ALLOW_UNTAGGED: ${{ inputs.allow_untagged }}
-      ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
-      ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
-      ENGINE: ${{ inputs.container_engine }}
-      DERIVATIVE_APT_REPOSITORY_OPTS: ${{ inputs.derivative_apt_repository_opts }}
-      CHOSEN_VERSION: ${{ inputs.version }}
+      BUILD_ARCH: ${{ github.event.inputs.arch }}
+      BUILD_TARGET: ${{ github.event.inputs.target }}
+      BUILD_TYPE: ${{ github.event.inputs.type }}
+      BUILD_FRESHNESS: ${{ github.event.inputs.freshness }}
+      ENGINE: ${{ github.event.inputs.container_engine }}
+      DERIVATIVE_APT_REPOSITORY_OPTS: ${{ github.event.inputs.derivative_apt_repository_opts }}
+      CHOSEN_VERSION: ${{ github.event.inputs.version }}
+      ALLOW_UNTAGGED: ${{ github.event.inputs.allow_untagged }}
+      ALLOW_UNCOMMITTED: ${{ github.event.inputs.allow_uncommitted }}
+      ALLOW_UNFROZEN: ${{ github.event.inputs.allow_unfrozen }}
+      ALLOW_REMOTE: ${{ github.event.inputs.remote_derivative_packages }}
+      DEBFULLNAME: ${{ github.event.inputs.debfullname }}
+      DEBEMAIL: ${{ github.event.inputs.debemail }}
+      flavors_list: ${{ github.event.inputs.flavors_list }}
+      dist_build_target_arch: ${{ github.event.inputs.arch }}
+      dist_build_multi_target_list: ${{ github.event.inputs.dist_build_multi_target_list }}
+      dist_build_version_type: ${{ github.event.inputs.type }}
+      dist_build_freshness: ${{ github.event.inputs.freshness }}
+      dist_build_redistributable: ${{ github.event.inputs.dist_build_redistributable }}
       flavor_meta_packages: ${{ inputs.flavor_meta_packages_to_install }}
       install_package_list: ${{ inputs.install_package_list }}
 
     steps:
-
       - name: Checkout Repository Core and History
         uses: actions/checkout@v4
         with:
@@ -140,9 +181,6 @@ jobs:
 
       - name: Initialize and Clean Host Environment
         shell: bash
-        env:
-          CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./.github/scripts/setup-host.sh
 
@@ -154,6 +192,7 @@ jobs:
           KEY_DIR: "/home/debian/.key_mnt"
           KEY_FILE: "/home/debian/.key_mnt/my-private-key.asc"
           GIT_URL: "https://github.com/tabletseeker/derivative-maker"
+          GIT_BRANCH: ${{ github.ref_name }}
         run: |
           ./.github/scripts/build-guest.sh
 
@@ -161,5 +200,6 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_FLAVOR: ${{ inputs.release_flavor }}
         run: |
           ./.github/scripts/gather-artifacts.sh

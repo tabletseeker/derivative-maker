@@ -16,6 +16,7 @@ printf '%s\n' "${CI_PRIVATE_KEY}" > "${KEY_FILE}"
 chmod 400 "${KEY_FILE}"
 set -x
 
+# Apt automation
 echo "[+] Pre-configuring package manager for non-interactive automation..."
 sudo mkdir -p /etc/apt/apt.conf.d
 sudo tee /etc/apt/apt.conf.d/99force-noninteractive > /dev/null << 'EOF'
@@ -30,9 +31,10 @@ export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update
 sudo apt-get install -y -q git qemu-utils coreutils curl gnupg sq \
   systemd systemd-container iptables sudo lsb-release podman buildah uidmap \
-  dbus-user-session haveged moreutils
+  dbus-user-session moreutils
 
-sudo systemctl start haveged || true
+# Keep session alive after tty disconnect
+sudo loginctl enable-linger debian
 
 echo "[+] Initializing unprivileged namespace pools..."
 if ! grep -q "debian" /etc/subuid; then
@@ -40,15 +42,13 @@ if ! grep -q "debian" /etc/subuid; then
   echo "debian:100000:65536" | sudo tee -a /etc/subgid
 fi
 
-sudo loginctl enable-linger debian
-
-# Extract sources and invoke the compilation matrix
+# Second clone with submodules
 echo "[+] Sourcing repository down into workspace context..."
 mkdir -p /home/debian/build-workspace
 
 git clone \
   --single-branch \
-  --branch "testing" \
+  --branch "${GIT_BRANCH}" \
   --recurse-submodules \
   "${GIT_URL}" \
   /home/debian/build-workspace
@@ -63,13 +63,13 @@ chmod 700 /home/debian/.gnupg
 cd /home/debian/build-workspace
 
 ./oci/derivative-maker-oci-run -- bash -c "
-  ./help-steps/ci-signing-setup && \
-  ./derivative-maker \
-    --flavor '${BUILD_FLAVOR}' \
-    --arch '${BUILD_ARCH}' \
-    --target '${BUILD_TARGET}' \
-    --type '${BUILD_TYPE}' \
-    --freshness '${BUILD_FRESHNESS}' \
-    --allow-untagged '${ALLOW_UNTAGGED}' \
-    --allow-uncommitted '${ALLOW_UNCOMMITTED}'
+./help-steps/ci-signing-setup && \
+./help-steps/dm-build-official \
+  --arch '${BUILD_ARCH}' \
+  --type '${BUILD_TYPE}' \
+  --freshness '${BUILD_FRESHNESS}' \
+  --allow-untagged '${ALLOW_UNTAGGED}' \
+  --allow-uncommitted '${ALLOW_UNCOMMITTED}' \
+  --remote-derivative-packages '${ALLOW_REMOTE}'
 "
+

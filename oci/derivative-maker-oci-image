@@ -23,16 +23,18 @@ declare rootfs
 rootfs=$(buildah mount "$ctr")
 
 ## Only use unfrozen sources when snapshot is missing and ALLOW_UNFROZEN=true
-if [[ -f "${FROZEN_SOURCES}" && -n "${snapshot_ts:-}" ]]; then
-    declare formatted_date
-    formatted_date=$(date --utc --date="@${snapshot_ts:-}" '+%Y%m%dT%H%M%SZ')
-    sed "s|XXX_TS_XXX|${formatted_date}/|g" "${FROZEN_SOURCES}" > "${rootfs}/etc/apt/dm-frozen.sources"
-    chmod 0644 "${rootfs}/etc/apt/dm-frozen.sources"
-elif [[ "${ALLOW_UNFROZEN:-false}" == "true" ]]; then
-    echo "Skipping source freeze injection and using unfrozen sources." >&2
+if [[ "${ALLOW_UNFROZEN:-false}" != "true" ]]; then
+    if [[ -f "${FROZEN_SOURCES}" && -n "${snapshot_ts:-}" ]]; then
+        declare formatted_date
+        formatted_date=$(date --utc --date="@${snapshot_ts:-}" '+%Y%m%dT%H%M%SZ')
+        sed "s|XXX_TS_XXX|${formatted_date}/|g" "${FROZEN_SOURCES}" > "${rootfs}/etc/apt/dm-frozen.sources"
+        chmod 0644 "${rootfs}/etc/apt/dm-frozen.sources"
+    else
+        echo "Error: Unfrozen sources are not allowed for production builds!" >&2
+        exit 1
+    fi
 else
-    echo "Error: Unfrozen sources are not allowed for production builds!" >&2
-    exit 1
+    echo "Skipping source freeze injection and using unfrozen sources." >&2
 fi
 
 ## Executes bootstrap script via stdin inside ctr.

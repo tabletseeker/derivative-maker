@@ -25,15 +25,12 @@ ssh -i ./id_ed25519 -p 2222 \
    -o -name '*.iso' -o -name '*.ova' -o -name '*.asc' \
    -o -name '*.sig' -o -name '*.torrent' \) \
    -print0 | xargs -0 tar -cf -" \
+
   | tar -xSf - -i --transform='s|.*/||' -C "${STAGING_DIR}"
 
 echo "=== Fix ownership of container-created build artifacts ==="
 cd "${STAGING_DIR}"
 sudo chown -R runner:runner .
-
-echo "=== Generate SHA256SUMS ==="
-find . -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 | xargs -0 sha256sum > SHA256SUMS || true
-cat SHA256SUMS || true
 
 echo "=== Split oversized files to respect release limits ==="
 find . -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 | while IFS= read -r -d '' ASSET; do
@@ -45,14 +42,10 @@ FILE_SIZE_MB="$(du -m "${ASSET}" | cut -f1)"
   fi
 done
 
-echo "=== Prepare release metadata ==="
-case "${BUILD_FLAVOR:-}" in
-  "kicksecure-lxqt") FLAVOR_NAME="Kicksecure-LXQt" ;;
-  "kicksecure-cli") FLAVOR_NAME="Kicksecure-CLI" ;;
-  "whonix-gateway-lxqt") FLAVOR_NAME="Whonix-Gateway-LXQt" ;;
-  "whonix-workstation-lxqt") FLAVOR_NAME="Whonix-Workstation-LXQt" ;;
-  *) FLAVOR_NAME="Derivative-Image" ;;
-esac
+echo "=== Generate SHA256SUMS ==="
+rm -f SHA256SUMS
+find . -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 | xargs -0 sha256sum > SHA256SUMS || true
+cat SHA256SUMS || true
 
 if [ "${BUILD_ARCH:-amd64}" = "amd64" ]; then
   ARCH_NAME="Intel_AMD64"
@@ -72,7 +65,6 @@ else
   FROZEN_SRC_STR="✅ Frozen"
 fi
 
-## Probably better to grab the tag name straight from the container instead of remotely.
 echo "INFO: Fetching newly created tag."
 git -C "${REPO_ROOT}" fetch origin --tags --force
 
@@ -84,10 +76,40 @@ if [[ -z "${RELEASE_TAG:-}" ]]; then
   exit 1
 fi
 
-RELEASE_TITLE="${FLAVOR_NAME} ${RELEASE_TAG%%-*} (${ARCH_NAME}/${BUILD_TARGET^^:-}/${BUILD_TYPE^^:-})"
+RELEASE_TITLE="${RELEASE_FLAVOR} ${RELEASE_TAG%%-*} (${ARCH_NAME}/${BUILD_TARGET^^:-}/${BUILD_TYPE^^:-})"
 
-echo "Target release tag resolved: ${RELEASE_TAG}"
-echo "Target release title resolved: ${RELEASE_TITLE}"
+# Generate Download Table
+MATRIX_FILE="${WORKSPACE_DIR}/download_matrix.md"
+cat << 'EOF' > "${MATRIX_FILE}"
+
+### 📦 Download Artifacts
+
+| Build Artifact / File Type | Download Link | File Size |
+| :--- | :--- | :--- |
+EOF
+
+find . -maxdepth 1 -type f ! -name "SHA256SUMS" | sort | while read -r FILE_PATH; do
+  FILE_NAME=$(basename "${FILE_PATH}")
+  FILE_SIZE=$(du -h "${FILE_PATH}" | cut -f1)
+
+  case "${FILE_NAME}" in
+    *.iso)        TYPE_STR="💿 Live Installer ISO" ;;
+    *.ova)        TYPE_STR="📦 VirtualBox Appliance (OVA)" ;;
+    *.qcow2.xz)   TYPE_STR="⚡ KVM / QEMU Image (QCOW2.xz)" ;;
+    *.qcow2.*.xz) TYPE_STR="⚡ KVM / QEMU Image (QCOW2.xz)" ;;
+    *.torrent)    TYPE_STR="🧲 Torrent File" ;;
+    *.asc|*.sig)  TYPE_STR="🔏 GPG Signature Verification" ;;
+    *sums)        TYPE_STR="📋 Cryptographic Checksums" ;;
+    *)            TYPE_STR="📄 Supplementary Asset" ;;
+  esac
+
+  DOWNLOAD_URL="${GIT_URL}/releases/download/${RELEASE_TAG}/${FILE_NAME}"
+  echo "| **${TYPE_STR}**<br>\`${FILE_NAME}\` | [Download Direct](${DOWNLOAD_URL}) | \`${FILE_SIZE}\` |" >> "${MATRIX_FILE}"
+done
+
+echo -e "\n#### 📋 Quick Verification Checksums\n\`\`\`text" >> "${MATRIX_FILE}"
+cat SHA256SUMS >> "${MATRIX_FILE}"
+echo -e "\`\`\`\n" >> "${MATRIX_FILE}"
 
 [ -n "${flavor_meta_packages:-}" ] && META_ROW="| **Custom Meta Packages Added** | \`$flavor_meta_packages\` |"
 [ -n "${install_package_list:-}" ] && PKG_ROW="| **Appended Package List** | \`$install_package_list\` |"
@@ -112,6 +134,10 @@ EOF
 [[ -n "${META_ROW:-}" ]] && echo "$META_ROW" >> "${WORKSPACE_DIR}/release_notes.md"
 [[ -n "${PKG_ROW:-}" ]] && echo "$PKG_ROW" >> "${WORKSPACE_DIR}/release_notes.md"
 [[ -n "${APT_ROW:-}" ]] && echo "$APT_ROW" >> "${WORKSPACE_DIR}/release_notes.md"
+
+# Append the visual artifact markdown table directly onto the build configuration document
+cat "${MATRIX_FILE}" >> "${WORKSPACE_DIR}/release_notes.md"
+rm -f "${MATRIX_FILE}"
 
 echo "=== Final staging layout ==="
 ls -lh "${STAGING_DIR}"
