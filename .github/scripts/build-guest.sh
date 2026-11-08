@@ -11,7 +11,7 @@ shopt -s shift_verbose
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE}")" && pwd)"
 
 # Ephemeral loopback network setup
-echo "Generating an ephemeral SSH keypair natively on the host runner..."
+echo "Generating an ephemeral SSH keypair on the host runner..."
 ssh-keygen -t ed25519 -N "" -f ./id_ed25519
 
 cat > user-data <<EOF
@@ -47,7 +47,7 @@ echo "Streaming Guest OS /dev/ttyS0"
 tail -f vm_output.log | sed 's/^/[VM LOG] /' &
 TAIL_PID=$!
 
-echo "Waiting for guest OS initialization and secure user provisioning..."
+echo "Waiting for guest OS initialization..."
 until ssh -i ./id_ed25519 -p 2222 \
           -o StrictHostKeyChecking=no \
           -o ConnectTimeout=2 \
