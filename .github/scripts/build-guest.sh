@@ -11,7 +11,7 @@ shopt -s shift_verbose
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE}")" && pwd)"
 
 # Ephemeral loopback network setup
-echo "Generating an ephemeral SSH keypair natively on the host runner..."
+echo "Generating an ephemeral SSH keypair on the host runner..."
 ssh-keygen -t ed25519 -N "" -f ./id_ed25519
 
 cat > user-data <<EOF
@@ -29,7 +29,6 @@ cloud-localds cloud-init.img user-data meta-data
 
 # Launch QEMU Instance Engine
 echo "Launching hardware-accelerated QEMU instance..."
-
 sudo qemu-system-x86_64 \
   -enable-kvm \
   -m 6G \
@@ -47,7 +46,7 @@ echo "Streaming Guest OS /dev/ttyS0"
 tail -f vm_output.log | sed 's/^/[VM LOG] /' &
 TAIL_PID=$!
 
-echo "Waiting for guest OS initialization and secure user provisioning..."
+echo "Waiting for guest OS initialization..."
 until ssh -i ./id_ed25519 -p 2222 \
           -o StrictHostKeyChecking=no \
           -o ConnectTimeout=2 \
@@ -57,7 +56,6 @@ until ssh -i ./id_ed25519 -p 2222 \
 done
 
 echo "Host runner: Executing deployment pipeline..."
-
 ssh -i ./id_ed25519 -p 2222 \
     -o StrictHostKeyChecking=no \
     -o ConnectTimeout=15 \
