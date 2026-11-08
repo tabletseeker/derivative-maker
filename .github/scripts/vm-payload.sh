@@ -12,8 +12,8 @@ shopt -s shift_verbose
 echo "[+] Guest Subsystem: Initializing key space..."
 mkdir -p "${KEY_DIR}"
 set +x
-printf '%s\n' "${CI_PRIVATE_KEY}" > "${KEY_FILE}"
-chmod 400 "${KEY_FILE}"
+  printf '%s\n' "${CI_PRIVATE_KEY}" > "${KEY_FILE}"
+  chmod 400 "${KEY_FILE}"
 set -x
 
 # Apt automation

@@ -45,6 +45,13 @@ if [[ ! -f "${PRIVATE_KEY_PATH}" ]]; then
   exit 1
 fi
 
+set +x
+  if [[ -z "${GITHUB_TOKEN}" ]]; then
+    echo "CRITICAL ERROR: github token asset missing" >&2
+    exit 1
+  fi
+set -x
+
 # Worktree safety check. If you want to allow dirty trees, make this explicit and controlled.
 if [[ "${ALLOW_UNCOMMITTED:-false}" != "true" ]]; then
   if ! git -C "${REPO_ROOT}" diff --quiet --ignore-submodules --exit-code; then
@@ -101,10 +108,10 @@ git -C "${REPO_ROOT}" config user.signingkey "${GPG_FINGERPRINT}"
 git -C "${REPO_ROOT}" config commit.gpgsign true
 git -C "${REPO_ROOT}" config tag.gpgSign true
 
-if [[ -n "${GITHUB_TOKEN}" ]]; then
+set +x
   git -C "${REPO_ROOT}" remote set-url origin \
     "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" || true
-fi
+set -x
 
 if git -C "${REPO_ROOT}" rev-parse --verify "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
   echo "INFO: tag ${RELEASE_TAG} already exists locally. Skipping creation."
