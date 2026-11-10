@@ -16,11 +16,16 @@ WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 STAGING_DIR="${WORKSPACE_DIR}/release-staging"
 REPO_ROOT="${REPO_ROOT:-${WORKSPACE_DIR}}"
 BUILD_LOG="${SCRIPT_DIR}/build.log"
-RENDERER="${SCRIPT_DIR}/release_display.py"
+RENDERER="${SCRIPT_DIR}/release-display.py"
 RELEASE_NOTES_FILE="${WORKSPACE_DIR}/release_notes.md"
 RUNNER_USER="$(id -un)"
 RUNNER_GROUP="$(id -gn)"
 GIT_URL="${GIT_URL:-${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-tabletseeker/derivative-maker}}"
+BUILD_LABEL="${RELEASE_FLAVOR:-${flavors_list:-build}}"
+BUILD_ID="${BUILD_LABEL,,}-${GITHUB_RUN_ID:-local}"
+CHECKSUM_FILE="SHA256SUMS-${BUILD_ID}"
+BUILD_LOG_FILE="build-${BUILD_ID}.log"
+BUILD_NOTES_FILE="${BUILD_ID}-release-notes.md"
 
 # Start clean so a previous run cannot add stale assets to this release.
 rm -rf -- "${STAGING_DIR}"
@@ -58,7 +63,7 @@ tar --create --file=- --null --files-from="${file_list}"
 REMOTE
 
 if [[ -f "${BUILD_LOG}" ]]; then
-  cp -- "${BUILD_LOG}" "${STAGING_DIR}/build.log"
+  cp -- "${BUILD_LOG}" "${STAGING_DIR}/${BUILD_LOG_FILE}"
 else
   echo "WARNING: Build log not found at ${BUILD_LOG}" >&2
 fi
@@ -67,7 +72,7 @@ echo "=== Fix ownership of container-created build artifacts ==="
 sudo chown -R "${RUNNER_USER}:${RUNNER_GROUP}" "${STAGING_DIR}"
 
 echo "=== Split oversized files to respect release limits ==="
-find "${STAGING_DIR}" -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 |
+find "${STAGING_DIR}" -maxdepth 1 -type f -print0 |
   while IFS= read -r -d '' asset; do
     file_size_mb="$(du -m -- "${asset}" | cut -f1)"
     if [[ "${file_size_mb}" -gt 2000 ]]; then
@@ -77,15 +82,6 @@ find "${STAGING_DIR}" -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 |
     fi
   done
 
-echo "=== Generate SHA256SUMS ==="
-(
-  cd -- "${STAGING_DIR}"
-  rm -f -- SHA256SUMS
-  find . -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 |
-    xargs -0 -r sha256sum > SHA256SUMS
-  cat SHA256SUMS
-)
-
 if [[ ! -f "${RENDERER}" ]]; then
   echo "ERROR: Release display renderer not found: ${RENDERER}" >&2
   exit 1
@@ -93,8 +89,10 @@ fi
 
 if [[ "${BUILD_ARCH:-amd64}" == "amd64" ]]; then
   ARCH_NAME="Intel_AMD64"
+elif [[ "${BUILD_ARCH:-}" == "arm64" ]]; then
+  ARCH_NAME="ARM64"
 else
-  ARCH_NAME="Intel_x86"
+  ARCH_NAME="${BUILD_ARCH:-unknown}"
 fi
 
 if [[ "${ALLOW_UNCOMMITTED:-false}" == "true" ]]; then
@@ -110,7 +108,7 @@ else
   FROZEN_SRC_STR="✅ Frozen"
 fi
 
-echo "INFO: Fetching newly created tag."
+echo "INFO: Fetching tags."
 git -C "${REPO_ROOT}" fetch origin --tags --force
 
 RELEASE_TAG="${RELEASE_TAG:-}"
@@ -127,7 +125,6 @@ fi
 
 if [[ -z "${RELEASE_TAG}" ]]; then
   echo "CRITICAL ERROR: Failed to resolve a valid release tag." >&2
-  echo "Aborting to prevent a corrupted or unsigned fallback release." >&2
   exit 1
 fi
 
@@ -135,8 +132,6 @@ BUILD_TARGET_UPPER="${dist_build_multi_target_list:-}"
 BUILD_TARGET_UPPER="${BUILD_TARGET_UPPER^^}"
 BUILD_TYPE_UPPER="${BUILD_TYPE:-}"
 BUILD_TYPE_UPPER="${BUILD_TYPE_UPPER^^}"
-
-RELEASE_TITLE="${RELEASE_FLAVOR} ${RELEASE_TAG%%-*} (${ARCH_NAME} ${BUILD_TARGET_UPPER} ${BUILD_TYPE_UPPER})"
 
 if [[ -n "${flavor_meta_packages:-}" ]]; then
   META_ROW="| **Custom Meta Packages Added** | \`${flavor_meta_packages}\` |"
@@ -149,19 +144,23 @@ if [[ -n "${DERIVATIVE_APT_REPOSITORY_OPTS:-}" ]]; then
 fi
 
 cat <<EOF > "${RELEASE_NOTES_FILE}"
+<!-- matrix-build:${BUILD_ID} -->
+
 ### 🛠️ Build Manifest
+
+### ${RELEASE_FLAVOR:-${flavors_list:-}} ${RELEASE_TAG%%-*} (${ARCH_NAME} ${BUILD_TARGET_UPPER} ${BUILD_TYPE_UPPER})
 
 | Parameter | Build Option |
 | :--- | :--- |
-| **Flavor Configuration** | \`${RELEASE_FLAVOR:-${flavors_list}}\` |
-| **Target Architecture** | \`${BUILD_ARCH}\` |
-| **Output Format Target** | \`${dist_build_multi_target_list}\` |
-| **System Footprint Type** | \`${BUILD_TYPE}\` |
-| **Repository Freshness** | \`${BUILD_FRESHNESS}\` |
-| **Container Build Engine** | \`${ENGINE}\` |
+| **Flavor Configuration** | \`${RELEASE_FLAVOR:-${flavors_list:-unknown}}\` |
+| **Target Architecture** | \`${BUILD_ARCH:-unknown}\` |
+| **Output Format Target** | \`${dist_build_multi_target_list:-unknown}\` |
+| **System Footprint Type** | \`${BUILD_TYPE:-unknown}\` |
+| **Repository Freshness** | \`${BUILD_FRESHNESS:-unknown}\` |
+| **Container Build Engine** | \`${ENGINE:-unknown}\` |
 | **Frozen Sources Status** | ${FROZEN_SRC_STR} |
 | **Enforcing Clean Git** | ${GIT_CLEAN_STR} |
-| **Release Version Tag** | \`${CHOSEN_VERSION:-${RELEASE_TAG}}\` |
+| **Release Version Tag** | \`${CHOSEN_VERSION:-${RELEASE_TAG%%-*}}\` |
 
 EOF
 
@@ -176,44 +175,39 @@ python3 "${RENDERER}" \
   "${RELEASE_TAG}" \
   >> "${RELEASE_NOTES_FILE}"
 
+# Unique asset is downloaded by the single publisher job after
+# all matrix jobs finish.
+cp -- "${RELEASE_NOTES_FILE}" "${STAGING_DIR}/${BUILD_NOTES_FILE}"
+
+echo "=== Generate build-specific SHA256SUMS ==="
+(
+  cd -- "${STAGING_DIR}"
+  rm -f -- "${CHECKSUM_FILE}"
+  find . -maxdepth 1 -type f ! -name "${CHECKSUM_FILE}" -print0 |
+    xargs -0 -r sha256sum > "${CHECKSUM_FILE}"
+  cat "${CHECKSUM_FILE}"
+)
+
 echo "=== Final staging layout ==="
 ls -lh "${STAGING_DIR}"
 
-RELEASE_EXISTS=true
-gh release view "${RELEASE_TAG}" >/dev/null 2>&1 || RELEASE_EXISTS=false
-
-if [[ "${RELEASE_EXISTS}" == "true" ]]; then
-  echo "INFO: Shared tag release found. Appending build notes..."
-
-  cumulative_notes="${WORKSPACE_DIR}/cumulative_notes.tmp"
-  gh release view "${RELEASE_TAG}" --json body --template '{{.body}}' \
-    > "${cumulative_notes}"
-  printf '\n\n---\n' >> "${cumulative_notes}"
-  cat "${RELEASE_NOTES_FILE}" >> "${cumulative_notes}"
-
-  gh release edit "${RELEASE_TAG}" \
-    --notes-file "${cumulative_notes}" \
-    --prerelease=false
-
-  rm -f -- "${cumulative_notes}"
-else
-  echo "INFO: First matrix build detected. Attempting release creation..."
-
-  if ! gh release create "${RELEASE_TAG}" \
-    --title "${RELEASE_TITLE}" \
-    --notes-file "${RELEASE_NOTES_FILE}" \
-    --draft=false \
-    --prerelease=false \
-    --target "$(git -C "${REPO_ROOT}" rev-parse HEAD)"; then
-    echo "INFO: Release creation did not complete; checking whether a parallel job created it."
-    gh release view "${RELEASE_TAG}" >/dev/null
-  fi
+# The prepare-release job must create this release before the matrix begins.
+if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+  echo "ERROR: Expected release '${RELEASE_TAG}' to exist before artifact upload." >&2
+  echo "Check the prepare-release job and GITHUB_TOKEN permissions." >&2
+  exit 1
 fi
 
-echo "INFO: Uploading staged artifacts to the release..."
 mapfile -d '' -t STAGED_ASSETS < <(
   find "${STAGING_DIR}" -maxdepth 1 -type f -print0 | sort -z
 )
-gh release upload "${RELEASE_TAG}" "${STAGED_ASSETS[@]}" --clobber
+
+if [[ "${#STAGED_ASSETS[@]}" -eq 0 ]]; then
+  echo "ERROR: No staged assets to upload." >&2
+  exit 1
+fi
+
+echo "INFO: Uploading this runner's assets to release '${RELEASE_TAG}'."
+gh release upload "${RELEASE_TAG}" "${STAGED_ASSETS[@]}"
 
 echo "=== Release assets processing complete. ==="

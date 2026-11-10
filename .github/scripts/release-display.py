@@ -10,7 +10,7 @@ release_url = f"{sys.argv[2].rstrip('/')}/releases/download/{sys.argv[3]}"
 
 CATEGORIES = (
     ("primary", "🏁 Primary Downloads", "Production Image"),
-    ("verification", "🔑 Verification", "OpenPGP Key & Signature"),
+    ("verification", "🔐 Verification", "OpenPGP Key & Signature"),
     ("checksums", "📋 Checksums", "SHA-512 Checksums"),
     ("torrents", "🧲 Torrents", "Torrent File"),
     ("buildinfo", "ℹ️ Build Information", "Build Metadata"),
@@ -99,7 +99,7 @@ for path in files:
 print("### 📦 Downloads\n")
 
 for flavor, example in flavors.items():
-    print(f"<details>\n<summary>🗂️ {flavor_label(example)}</summary>\n<br><br>\n")
+    print(f"<details>\n<summary>🗂️ {flavor_label(example)}</summary>\n<br>\n")
     flavor_files = [p for p in files if p.name.startswith(f"{flavor}-")]
 
     for key, title, heading in CATEGORIES:
@@ -134,7 +134,7 @@ flavor_files = {
 }
 miscellaneous = [path for path in files if path not in flavor_files]
 
-print("<details>\n<summary>📄 Miscellaneous</summary>\n")
+print("<details>\n<summary>📄 Support Files</summary>\n")
 if miscellaneous:
     print("| Artifact | Size |")
     print("|---|---:|")
@@ -142,7 +142,7 @@ if miscellaneous:
         print(f"| {link(path)} | {size(path)} |")
     print()
 else:
-    print("No miscellaneous files.\n")
+    print("No support files.\n")
 print("</details>\n")
 
 # Summarize primary images, direct signatures, and flavor developer keys.
@@ -164,7 +164,7 @@ for flavor in flavors:
         and path.name.endswith(".asc")
     )
 
-print("### 🔐 Quick SHA-512 Checksums\n")
+print("### 🔢 Quick SHA-512 Checksums\n")
 print("Verify all downloads using the provided checksums and signatures.\n")
 print("```text")
 for name in sorted(important):

@@ -120,14 +120,6 @@ else
   git -C "${REPO_ROOT}" tag -s -m "release: ${RELEASE_TAG}" "${RELEASE_TAG}"
 fi
 
-# Query the remote server to see if the tag exists upstream
-if git -C "${REPO_ROOT}" ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
-  echo "INFO: tag ${RELEASE_TAG} already exists upstream. Skipping push."
-else
-  echo "INFO: Pushing ${RELEASE_TAG} to origin"
-  git -C "${REPO_ROOT}" push origin "refs/tags/${RELEASE_TAG}"
-fi
-
 # Verify the tag.
 git -C "${REPO_ROOT}" tag -v "${RELEASE_TAG}"
 

@@ -1,0 +1,178 @@
+name: Derivative-Maker Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Shared release version"
+        required: false
+        default: "18.2.4.8"
+        type: string
+
+      release_name:
+        description: "Production Label"
+        required: false
+        default: "Production Release:"
+        type: string
+
+      freshness:
+        description: "APT Sources Freshness"
+        required: false
+        default: "frozen"
+        type: choice
+        options:
+          - "frozen"
+          - "current"
+
+      allow_untagged:
+        description: "Allow Untagged"
+        required: false
+        default: false
+        type: boolean
+
+      allow_uncommitted:
+        description: "Allow Uncommitted"
+        required: false
+        default: false
+        type: boolean
+
+      allow_unfrozen:
+        description: "Allow Unfrozen Sources"
+        required: false
+        default: false
+        type: boolean
+
+      remote_derivative_packages:
+        description: "Remote Packages"
+        required: false
+        default: false
+        type: boolean
+
+      dist_build_redistributable:
+        description: "Production Release"
+        required: false
+        default: true
+        type: boolean
+
+      debfullname:
+        description: "Key Owner Identity"
+        required: false
+        default: "tabletseeker-ci"
+        type: string
+
+      debemail:
+        description: "Key Owner E-mail"
+        required: false
+        default: "tabletseeker-ci@github.com"
+        type: string
+
+permissions:
+  contents: write
+
+# Serializes runs for the same version.
+concurrency:
+  group: derivative-maker-release-${{ inputs.version }}-nightly
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    name: Create signed tag and release
+    runs-on: ubuntu-latest
+    environment: release-signing
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
+      RELEASE_TAG: ${{ inputs.version }}-nightly
+      RELEASE_TITLE: ${{ inputs.release_name }} ${{ inputs.version }}
+      DEBFULLNAME: ${{ inputs.debfullname }}
+      DEBEMAIL: ${{ inputs.debemail }}
+    steps:
+      - name: Checkout commit to release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Sign target tag and release
+        shell: bash
+        run: |
+          ./.github/scripts/prepare-release.sh
+
+  dm-matrix:
+    name: ${{ matrix.release_flavor }}
+    needs: prepare-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - release_flavor: "Kicksecure-LXQt"
+            flavors_list: "kicksecure-lxqt"
+            arch: "amd64"
+            target: "qcow2"
+            type: "vm"
+            container_engine: "podman"
+            flavor_meta_packages_to_install: ""
+            install_package_list: ""
+            derivative_apt_repository_opts: ""
+
+          - release_flavor: "Whonix-LXQt"
+            flavors_list: "whonix-gateway-lxqt whonix-workstation-lxqt"
+            arch: "amd64"
+            target: "qcow2"
+            type: "vm"
+            container_engine: "podman"
+            flavor_meta_packages_to_install: ""
+            install_package_list: ""
+            derivative_apt_repository_opts: ""
+
+    uses: ./.github/workflows/container.yaml
+    with:
+      # Shared top-level release values.
+      release_name: ${{ inputs.release_name }}
+      freshness: ${{ inputs.freshness }}
+      dist_build_redistributable: ${{ inputs.dist_build_redistributable }}
+      allow_untagged: ${{ inputs.allow_untagged }}
+      allow_uncommitted: ${{ inputs.allow_uncommitted }}
+      allow_unfrozen: ${{ inputs.allow_unfrozen }}
+      remote_derivative_packages: ${{ inputs.remote_derivative_packages }}
+      version: ${{ inputs.version }}
+      debfullname: ${{ inputs.debfullname }}
+      debemail: ${{ inputs.debemail }}
+
+      # Per-matrix values.
+      release_flavor: ${{ matrix.release_flavor }}
+      flavors_list: ${{ matrix.flavors_list }}
+      dist_build_multi_target_list: ${{ matrix.target }}
+      arch: ${{ matrix.arch }}
+      type: ${{ matrix.type }}
+      container_engine: ${{ matrix.container_engine }}
+      flavor_meta_packages_to_install: ${{ matrix.flavor_meta_packages_to_install }}
+      install_package_list: ${{ matrix.install_package_list }}
+      derivative_apt_repository_opts: ${{ matrix.derivative_apt_repository_opts }}
+
+    secrets: inherit
+
+  publish-release-notes:
+    name: Append matrix build notes
+    needs:
+      - prepare-release
+      - dm-matrix
+    if: ${{ always() && !cancelled() && needs.prepare-release.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ inputs.version }}-nightly
+    steps:
+      - name: Checkout repository scripts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Run release notes publisher
+        shell: bash
+        run: |
+          ./.github/scripts/publish-release-notes.sh
