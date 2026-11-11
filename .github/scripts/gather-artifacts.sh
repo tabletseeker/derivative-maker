@@ -146,9 +146,7 @@ fi
 cat <<EOF > "${RELEASE_NOTES_FILE}"
 <!-- matrix-build:${BUILD_ID} -->
 
-### 🛠️ Build Manifest
-
-### ${RELEASE_FLAVOR:-${flavors_list:-}} ${RELEASE_TAG%%-*} (${ARCH_NAME} ${BUILD_TARGET_UPPER} ${BUILD_TYPE_UPPER})
+## ${RELEASE_FLAVOR:-${flavors_list:-}} ${RELEASE_TAG%%-*} (${ARCH_NAME} ${BUILD_TARGET_UPPER} ${BUILD_TYPE_UPPER})
 
 | Parameter | Build Option |
 | :--- | :--- |

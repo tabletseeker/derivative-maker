@@ -1,0 +1,13 @@
+{
+  "id": "bundle-lxqt",
+  "release_flavor": "Whonix/Kicksecure-LXQt",
+  "flavors_list": "kicksecure-lxqt whonix-gateway-lxqt whonix-workstation-lxqt",
+  "arch": "amd64",
+  "target": "qcow2",
+  "type": "vm",
+  "container_engine": "podman",
+  "flavor_meta_packages_to_install": "",
+  "install_package_list": "",
+  "derivative_apt_repository_opts": ""
+}
+

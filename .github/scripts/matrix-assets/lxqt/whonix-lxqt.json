@@ -1,0 +1,13 @@
+{
+  "id": "whonix-lxqt",
+  "release_flavor": "Whonix-LXQt",
+  "flavors_list": "whonix-gateway-lxqt whonix-workstation-lxqt",
+  "arch": "amd64",
+  "target": "qcow2",
+  "type": "vm",
+  "container_engine": "podman",
+  "flavor_meta_packages_to_install": "",
+  "install_package_list": "",
+  "derivative_apt_repository_opts": ""
+}
+

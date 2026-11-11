@@ -3,6 +3,12 @@ name: Derivative-Maker Matrix
 on:
   workflow_dispatch:
     inputs:
+      matrix_assets:
+        description: "Matrix asset ID"
+        required: true
+        default: "bundle-lxqt bundle-cli"
+        type: string
+
       version:
         description: "Shared release version"
         required: false
@@ -75,10 +81,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  select-matrix-assets:
+    name: Select build assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Checkout matrix asset files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          sparse-checkout: |
+            .github/scripts/generate-matrix.sh
+            .github/scripts/matrix-assets
+
+      - name: Generate matrix
+        id: generate
+        shell: bash
+        env:
+          MATRIX_ASSETS: ${{ inputs.matrix_assets }}
+        run: bash ./.github/scripts/generate-matrix.sh
+
   prepare-release:
     name: Create signed tag and release
+    needs: select-matrix-assets
     runs-on: ubuntu-latest
-    environment: release-signing
     permissions:
       contents: write
     env:
@@ -97,36 +126,17 @@ jobs:
 
       - name: Sign target tag and release
         shell: bash
-        run: |
-          ./.github/scripts/prepare-release.sh
+        run: ./.github/scripts/prepare-release.sh
 
   dm-matrix:
     name: ${{ matrix.release_flavor }}
-    needs: prepare-release
+    needs:
+      - select-matrix-assets
+      - prepare-release
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - release_flavor: "Kicksecure-LXQt"
-            flavors_list: "kicksecure-lxqt"
-            arch: "amd64"
-            target: "qcow2"
-            type: "vm"
-            container_engine: "podman"
-            flavor_meta_packages_to_install: ""
-            install_package_list: ""
-            derivative_apt_repository_opts: ""
-
-          - release_flavor: "Whonix-LXQt"
-            flavors_list: "whonix-gateway-lxqt whonix-workstation-lxqt"
-            arch: "amd64"
-            target: "qcow2"
-            type: "vm"
-            container_engine: "podman"
-            flavor_meta_packages_to_install: ""
-            install_package_list: ""
-            derivative_apt_repository_opts: ""
-
+        include: ${{ fromJSON(needs.select-matrix-assets.outputs.matrix) }}
     uses: ./.github/workflows/container.yaml
     with:
       # Shared top-level release values.
@@ -141,7 +151,7 @@ jobs:
       debfullname: ${{ inputs.debfullname }}
       debemail: ${{ inputs.debemail }}
 
-      # Per-matrix values.
+      # Per-build values from the selected asset files.
       release_flavor: ${{ matrix.release_flavor }}
       flavors_list: ${{ matrix.flavors_list }}
       dist_build_multi_target_list: ${{ matrix.target }}
@@ -151,7 +161,6 @@ jobs:
       flavor_meta_packages_to_install: ${{ matrix.flavor_meta_packages_to_install }}
       install_package_list: ${{ matrix.install_package_list }}
       derivative_apt_repository_opts: ${{ matrix.derivative_apt_repository_opts }}
-
     secrets: inherit
 
   publish-release-notes:
@@ -174,5 +183,4 @@ jobs:
 
       - name: Run release notes publisher
         shell: bash
-        run: |
-          ./.github/scripts/publish-release-notes.sh
+        run: ./.github/scripts/publish-release-notes.sh

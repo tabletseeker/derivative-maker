@@ -1,0 +1,13 @@
+{
+  "id": "bundle-cli",
+  "release_flavor": "Whonix/Kicksecure-CLI",
+  "flavors_list": "kicksecure-cli whonix-gateway-cli whonix-workstation-cli",
+  "arch": "amd64",
+  "target": "qcow2",
+  "type": "vm",
+  "container_engine": "podman",
+  "flavor_meta_packages_to_install": "",
+  "install_package_list": "",
+  "derivative_apt_repository_opts": ""
+}
+

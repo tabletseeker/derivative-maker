@@ -1,139 +1,6 @@
 name: Derivative Maker CI
 
 on:
-  workflow_dispatch:
-    inputs:
-      release_name:
-        description: "Production Label"
-        required: false
-        default: "Production Release:"
-        type: string
-
-      release_flavor:
-        description: "Release Flavor Label"
-        required: false
-        default: ""
-        type: string
-
-      flavors_list:
-        description: "Flavor List"
-        required: false
-        default: "kicksecure-lxqt whonix-gateway-lxqt whonix-workstation-lxqt"
-        type: string
-
-      dist_build_multi_target_list:
-        description: "Target List"
-        required: false
-        default: "qcow2"
-        type: string
-
-      arch:
-        description: "Target CPU Architecture"
-        required: false
-        default: "amd64"
-        type: choice
-        options:
-          - "amd64"
-          - "arm64"
-
-      type:
-        description: "System Footprint Type"
-        required: false
-        default: "vm"
-        type: choice
-        options:
-          - "vm"
-          - "container"
-          - "base"
-          - "host"
-
-      freshness:
-        description: "APT Sources Freshness"
-        required: false
-        default: "frozen"
-        type: choice
-        options:
-          - "frozen"
-          - "current"
-
-      container_engine:
-        description: "Container Engine"
-        required: false
-        default: "podman"
-        type: choice
-        options:
-          - "podman"
-          - "docker"
-          - "nerdctl"
-          - "colima"
-          - "buildah"
-
-      dist_build_redistributable:
-        description: "Production Release"
-        required: false
-        default: true
-        type: boolean
-
-      allow_untagged:
-        description: "Allow Untagged"
-        required: false
-        default: false
-        type: boolean
-
-      allow_uncommitted:
-        description: "Allow Uncommitted"
-        required: false
-        default: false
-        type: boolean
-
-      allow_unfrozen:
-        description: "Allow Unfrozen Sources"
-        required: false
-        default: false
-        type: boolean
-
-      remote_derivative_packages:
-        description: "Remote Packages"
-        required: false
-        default: false
-        type: boolean
-
-      version:
-        description: "Release Version"
-        required: false
-        default: "18.2.4.8"
-        type: string
-
-      flavor_meta_packages_to_install:
-        description: "Extra Meta Packages"
-        required: false
-        default: ""
-        type: string
-
-      install_package_list:
-        description: "Extra Package List"
-        required: false
-        default: ""
-        type: string
-
-      derivative_apt_repository_opts:
-        description: "Custom APT Repo"
-        required: false
-        default: ""
-        type: string
-
-      debfullname:
-        description: "Key Owner Identity"
-        required: false
-        default: "tabletseeker-ci"
-        type: string
-
-      debemail:
-        description: "Key Owner E-mail"
-        required: false
-        default: "tabletseeker-ci@github.com"
-        type: string
-
   workflow_call:
     inputs:
       release_name:
@@ -150,7 +17,7 @@ on:
         description: "Flavor List"
         required: false
         type: string
-        default: "kicksecure-lxqt whonix-gateway-lxqt whonix-workstation-lxqt"
+        default: "kicksecure-lxqt"
       dist_build_multi_target_list:
         description: "Target List"
         required: false
@@ -238,8 +105,8 @@ on:
 
 jobs:
   dm-build-official:
+    name: official
     runs-on: ubuntu-latest
-    environment: release-signing
     permissions:
       contents: write
 

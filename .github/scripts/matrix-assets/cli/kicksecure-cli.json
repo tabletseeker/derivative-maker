@@ -1,0 +1,13 @@
+{
+  "id": "kicksecure-cli",
+  "release_flavor": "Kicksecure-CLI",
+  "flavors_list": "kicksecure-cli",
+  "arch": "amd64",
+  "target": "qcow2",
+  "type": "vm",
+  "container_engine": "podman",
+  "flavor_meta_packages_to_install": "",
+  "install_package_list": "",
+  "derivative_apt_repository_opts": ""
+}
+
