@@ -1,7 +1,7 @@
 {
-  "id": "bundle-cli",
-  "release_flavor": "Whonix/Kicksecure-CLI",
-  "flavors_list": "kicksecure-cli whonix-gateway-cli whonix-workstation-cli",
+  "id": "lxqt-vm-amd64",
+  "release_flavor": "Whonix_Kicksecure-LXQt",
+  "flavors_list": "kicksecure-lxqt whonix-gateway-lxqt whonix-workstation-lxqt",
   "arch": "amd64",
   "target": "qcow2",
   "type": "vm",

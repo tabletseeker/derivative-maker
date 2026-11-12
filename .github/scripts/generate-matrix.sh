@@ -69,6 +69,21 @@ add_asset() {
   FILES+=("${file}")
 }
 
+is_aggregate_asset() {
+  local file="$1"
+  local id kind
+
+  if ! jq -e 'type == "object"' "${file}" >/dev/null; then
+    echo "ERROR: Invalid JSON asset: ${file}" >&2
+    exit 1
+  fi
+
+  id="$(jq -r '.id // ""' "${file}")"
+  kind="$(jq -r '.kind // ""' "${file}")"
+
+  [[ "${kind}" == "bundle" || "${id}" == *all-* || "${id}" == *bundle* ]]
+}
+
 if ((${#ASSET_IDS[@]} == 1)) && [[ "${ASSET_IDS[0]}" == "all" ]]; then
   mapfile -d '' -t ALL_FILES < <(
     find "${ASSET_DIR}" -type f -name '*.json' -print0 | sort -z
@@ -80,6 +95,11 @@ if ((${#ASSET_IDS[@]} == 1)) && [[ "${ASSET_IDS[0]}" == "all" ]]; then
   fi
 
   for file in "${ALL_FILES[@]}"; do
+    if is_aggregate_asset "${file}"; then
+      printf 'Skipping aggregate asset: %s\n' "${file}"
+      continue
+    fi
+
     add_asset "${file}"
   done
 else
@@ -107,6 +127,11 @@ else
 
     add_asset "${matches[0]}" "${id}"
   done
+fi
+
+if ((${#FILES[@]} == 0)); then
+  echo "ERROR: No build assets selected." >&2
+  exit 1
 fi
 
 matrix="$(jq -c -s '.' "${FILES[@]}")"

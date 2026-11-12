@@ -197,6 +197,7 @@ set +x
     --user "${OCI_USER}" \
     --env "DERIVATIVE_APT_REPOSITORY_OPTS=${DERIVATIVE_APT_REPOSITORY_OPTS:-}" \
     --env "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
+    --env "RELEASE_TAG=${RELEASE_TAG:-}" \
     --env "CHOSEN_VERSION=${CHOSEN_VERSION:-}" \
     --env "DEBFULLNAME=${DEBFULLNAME:-}" \
     --env "DEBEMAIL=${DEBEMAIL:-}" \

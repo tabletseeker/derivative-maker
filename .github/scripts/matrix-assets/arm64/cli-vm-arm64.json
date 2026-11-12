@@ -1,0 +1,13 @@
+{
+  "id": "cli-vm-arm64",
+  "release_flavor": "Whonix_Kicksecure-CLI",
+  "flavors_list": "kicksecure-cli whonix-gateway-cli whonix-workstation-cli",
+  "arch": "arm64",
+  "target": "qcow2",
+  "type": "vm",
+  "container_engine": "podman",
+  "flavor_meta_packages_to_install": "",
+  "install_package_list": "",
+  "derivative_apt_repository_opts": ""
+}
+

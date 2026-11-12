@@ -1,7 +1,7 @@
 {
-  "id": "whonix-cli",
-  "release_flavor": "Whonix-CLI",
-  "flavors_list": "whonix-gateway-cli whonix-workstation-cli",
+  "id": "cli-vm-amd64",
+  "release_flavor": "Whonix_Kicksecure-CLI",
+  "flavors_list": "kicksecure-cli whonix-gateway-cli whonix-workstation-cli",
   "arch": "amd64",
   "target": "qcow2",
   "type": "vm",
