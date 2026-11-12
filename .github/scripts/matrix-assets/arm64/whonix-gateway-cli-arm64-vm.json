@@ -1,0 +1,13 @@
+{
+  "id": "whonix-gateway-cli-arm64-vm",
+  "release_flavor": "Whonix-Gateway-CLI",
+  "flavors_list": "whonix-gateway-cli",
+  "arch": "arm64",
+  "target": "qcow2",
+  "type": "vm",
+  "container_engine": "podman",
+  "flavor_meta_packages_to_install": "",
+  "install_package_list": "",
+  "derivative_apt_repository_opts": ""
+}
+

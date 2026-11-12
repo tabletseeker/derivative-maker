@@ -23,14 +23,10 @@ chmod -R 700 "${SIGNIFY_DIR}" "${DM_CONFIG_DIR}" "${SSH_DIR}"
 
 cd "${REPO_ROOT}"
 
-# Prefer a release version from a user-provided value; otherwise use the latest tag or a fallback.
-if [[ -n "${CHOSEN_VERSION:-}" ]]; then
-  RELEASE_VERSION="${CHOSEN_VERSION}"
-else
-  RELEASE_VERSION="$(dpkg-parsechangelog --show-field=Version | sed 's/.*://;s/-.*//')"
+if [[ -z "${RELEASE_TAG:-}" ]]; then
+  echo "ERROR: RELEASE_TAG must be provided by the workflow." >&2
+  exit 1
 fi
-
-RELEASE_TAG="${RELEASE_TAG:-${RELEASE_VERSION}-nightly}"
 
 echo "INFO: release tag = ${RELEASE_TAG}"
 echo "INFO: repo = ${REPO_ROOT}"
