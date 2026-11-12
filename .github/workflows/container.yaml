@@ -72,7 +72,11 @@ on:
         description: "Release Version"
         required: false
         type: string
-        default: "18.2.4.8"
+        default: ""
+      release_tag:
+        description: "Full release tag"
+        required: true
+        type: string
       flavor_meta_packages_to_install:
         description: "Extra Meta Packages"
         required: false
@@ -136,7 +140,7 @@ jobs:
       - name: Checkout core repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           fetch-tags: true
           submodules: false
@@ -151,6 +155,7 @@ jobs:
         env:
           CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
           KEY_DIR: "/home/debian/.key_mnt"
           KEY_FILE: "/home/debian/.key_mnt/my-private-key.asc"
           GIT_URL: "https://github.com/tabletseeker/derivative-maker"
@@ -164,6 +169,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NAME: ${{ inputs.release_name }}
           RELEASE_FLAVOR: ${{ inputs.release_flavor }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
           GIT_URL: "https://github.com/tabletseeker/derivative-maker"
         run: |
           ./.github/scripts/gather-artifacts.sh

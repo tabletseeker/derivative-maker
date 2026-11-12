@@ -6,13 +6,19 @@ on:
       matrix_assets:
         description: "Matrix asset ID"
         required: true
-        default: "bundle-lxqt bundle-cli"
+        default: "all-amd64-kvm"
         type: string
 
       version:
         description: "Shared release version"
         required: false
         default: "18.2.4.8"
+        type: string
+
+      release_suffix:
+        description: "Tag suffix"
+        required: false
+        default: "nightly"
         type: string
 
       release_name:
@@ -77,7 +83,7 @@ permissions:
 
 # Serializes runs for the same version.
 concurrency:
-  group: derivative-maker-release-${{ inputs.version }}-nightly
+  group: derivative-maker-release-${{ inputs.version }}-${{ inputs.release_suffix }}
   cancel-in-progress: false
 
 jobs:
@@ -92,7 +98,7 @@ jobs:
       - name: Checkout matrix asset files
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
           sparse-checkout: |
             .github/scripts/generate-matrix.sh
             .github/scripts/matrix-assets
@@ -113,7 +119,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
-      RELEASE_TAG: ${{ inputs.version }}-nightly
+      RELEASE_TAG: ${{ inputs.version }}-${{ inputs.release_suffix }}
       RELEASE_TITLE: ${{ inputs.release_name }} ${{ inputs.version }}
       DEBFULLNAME: ${{ inputs.debfullname }}
       DEBEMAIL: ${{ inputs.debemail }}
@@ -121,7 +127,7 @@ jobs:
       - name: Checkout commit to release
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Sign target tag and release
@@ -148,6 +154,7 @@ jobs:
       allow_unfrozen: ${{ inputs.allow_unfrozen }}
       remote_derivative_packages: ${{ inputs.remote_derivative_packages }}
       version: ${{ inputs.version }}
+      release_tag: ${{ inputs.version }}-${{ inputs.release_suffix }}
       debfullname: ${{ inputs.debfullname }}
       debemail: ${{ inputs.debemail }}
 
@@ -174,12 +181,12 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_TAG: ${{ inputs.version }}-nightly
+      RELEASE_TAG: ${{ inputs.version }}-${{ inputs.release_suffix }}
     steps:
       - name: Checkout repository scripts
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
 
       - name: Run release notes publisher
         shell: bash

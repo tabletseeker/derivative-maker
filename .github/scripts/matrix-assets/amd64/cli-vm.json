@@ -1,9 +1,9 @@
 {
-  "id": "whonix-cli",
-  "release_flavor": "Whonix-CLI",
-  "flavors_list": "whonix-gateway-cli whonix-workstation-cli",
+  "id": "cli-vm-amd64",
+  "release_flavor": "Kicksecure CLI",
+  "flavors_list": "kicksecure-cli whonix-gateway-cli whonix-workstation-cli",
   "arch": "amd64",
-  "target": "qcow2",
+  "target": "virtualbox qcow2",
   "type": "vm",
   "container_engine": "podman",
   "flavor_meta_packages_to_install": "",

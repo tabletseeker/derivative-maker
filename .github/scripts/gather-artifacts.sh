@@ -108,23 +108,8 @@ else
   FROZEN_SRC_STR="✅ Frozen"
 fi
 
-echo "INFO: Fetching tags."
-git -C "${REPO_ROOT}" fetch origin --tags --force
-
-RELEASE_TAG="${RELEASE_TAG:-}"
-if [[ -z "${RELEASE_TAG}" ]]; then
-  if [[ -n "${CHOSEN_VERSION:-}" ]]; then
-    RELEASE_TAG="${CHOSEN_VERSION}-nightly"
-  else
-    mapfile -t RELEASE_TAGS < <(
-      git -C "${REPO_ROOT}" tag --sort=-v:refname
-    )
-    RELEASE_TAG="${RELEASE_TAGS[0]:-}"
-  fi
-fi
-
-if [[ -z "${RELEASE_TAG}" ]]; then
-  echo "CRITICAL ERROR: Failed to resolve a valid release tag." >&2
+if [[ -z "${RELEASE_TAG:-}" ]]; then
+  echo "ERROR: RELEASE_TAG must be provided by the workflow." >&2
   exit 1
 fi
 

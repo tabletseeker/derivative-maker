@@ -1,8 +1,8 @@
 {
-  "id": "kicksecure-cli",
+  "id": "kicksecure-cli-arm64-vm",
   "release_flavor": "Kicksecure-CLI",
   "flavors_list": "kicksecure-cli",
-  "arch": "amd64",
+  "arch": "arm64",
   "target": "qcow2",
   "type": "vm",
   "container_engine": "podman",
