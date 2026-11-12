@@ -1,8 +1,8 @@
 {
-  "id": "whonix-lxqt",
-  "release_flavor": "Whonix-LXQt",
-  "flavors_list": "whonix-gateway-lxqt whonix-workstation-lxqt",
-  "arch": "amd64",
+  "id": "kicksecure-lxqt-arm64-vm",
+  "release_flavor": "Kicksecure-LXQt",
+  "flavors_list": "kicksecure-lxqt",
+  "arch": "arm64",
   "target": "qcow2",
   "type": "vm",
   "container_engine": "podman",

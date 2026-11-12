@@ -8,6 +8,8 @@ set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
 
+VM_WORKDIR="/home/debian/build-workspace"
+
 # Prep signing key for key_mnt
 echo "[+] Guest Subsystem: Initializing key space..."
 mkdir -p "${KEY_DIR}"
@@ -44,17 +46,20 @@ fi
 
 # Second clone with submodules
 echo "[+] Sourcing repository down into workspace context..."
-mkdir -p /home/debian/build-workspace
+mkdir -p "${VM_WORKDIR}"
 
 git clone \
   --single-branch \
   --branch "${GIT_BRANCH}" \
   --recurse-submodules \
   "${GIT_URL}" \
-  /home/debian/build-workspace
+  "${VM_WORKDIR}"
+
+git -C "${VM_WORKDIR}" checkout --detach "${GITHUB_SHA}"
+git -C "${VM_WORKDIR}" submodule update --init --recursive
 
 echo "[+] Launching release pipeline..."
-cd /home/debian/build-workspace
+cd "${VM_WORKDIR}"
 
 ./oci/derivative-maker-oci-run -- bash -c "
 ./help-steps/ci-signing-setup && \

@@ -1,0 +1,13 @@
+{
+  "id": "whonix-gateway-lxqt-amd64-vm",
+  "release_flavor": "Whonix-Gateway-LXQt",
+  "flavors_list": "whonix-gateway-lxqt",
+  "arch": "amd64",
+  "target": "virtualbox qcow2",
+  "type": "vm",
+  "container_engine": "podman",
+  "flavor_meta_packages_to_install": "",
+  "install_package_list": "",
+  "derivative_apt_repository_opts": ""
+}
+

@@ -1,65 +1,113 @@
 #!/usr/bin/env python3
 import hashlib
+import html
 import re
 import sys
 from pathlib import Path
 from urllib.parse import quote
 
+if len(sys.argv) != 4:
+    raise SystemExit(
+        "Usage: release-display.py STAGING_DIR GIT_URL RELEASE_TAG"
+    )
+
 staging = Path(sys.argv[1])
-release_url = f"{sys.argv[2].rstrip('/')}/releases/download/{sys.argv[3]}"
+release_url = (
+    f"{sys.argv[2].rstrip('/')}/releases/download/"
+    f"{quote(sys.argv[3], safe='-._~')}"
+)
 
 CATEGORIES = (
     ("primary", "🏁 Primary Downloads", "Production Image"),
-    ("verification", "🔐 Verification", "OpenPGP Key & Signature"),
+    ("verification", "🔐 Verification", "OpenPGP Key, Signature & Public Key"),
     ("checksums", "📋 Checksums", "SHA-512 Checksums"),
     ("torrents", "🧲 Torrents", "Torrent File"),
     ("buildinfo", "ℹ️ Build Information", "Build Metadata"),
 )
+
 PRIMARY_SUFFIXES = (
-    ".qcow2.libvirt.xz", ".iso", ".ova", ".xz",
-    ".vdi", ".vmdk", ".img", ".raw",
+    ".qcow2.libvirt.xz",
+    ".raw.libvirt.xz",
+    ".iso",
+    ".ova",
+    ".vdi",
+    ".vmdk",
+    ".img",
+    ".raw",
+    ".xz",
 )
+
+ARCHITECTURES = ("Intel_AMD64", "ARM64", "amd64", "arm64")
 
 
 def unsplit(name):
+    """Return the original asset name for a GNU split part."""
     return re.sub(r"\.part_[^.]+$", "", name)
 
 
-def category(name):
-    if name.endswith((".asc", ".sig")):
-        return "verification"
-    if name.endswith(".sha512sums"):
-        return "checksums"
-    if name.endswith(".torrent"):
-        return "torrents"
-    if name.endswith(".dm-buildinfo"):
-        return "buildinfo"
-    return "primary" if unsplit(name).endswith(PRIMARY_SUFFIXES) else "buildinfo"
+def is_primary(name):
+    original_name = unsplit(name)
 
+    if original_name.startswith("derivative-maker-source-"):
+        return False
 
-def flavor_of(name):
-    if name.startswith("derivative-maker-source-"):
-        return None
-    if not unsplit(name).endswith(PRIMARY_SUFFIXES):
-        return None
-    match = re.match(r"^([A-Za-z0-9_]+)-", name)
-    return match.group(1) if match else None
-
-
-def flavor_label(name):
-    label = unsplit(name)
-    label = re.sub(
-        r"\.(?:qcow2\.libvirt\.xz|iso|ova|xz|vdi|vmdk|img|raw)$", "", label
+    return original_name.lower().endswith(
+        tuple(suffix.lower() for suffix in PRIMARY_SUFFIXES)
     )
-    label = re.sub(r"\.Intel_.*$", "", label)
-    return re.sub(r"-nightly$", "", label)
+
+
+def product_label(name):
+    """Infer the product label from the filename of a primary asset."""
+    if not is_primary(name):
+        return None
+
+    original_name = unsplit(name)
+    suffix = next(
+        suffix
+        for suffix in PRIMARY_SUFFIXES
+        if original_name.lower().endswith(suffix.lower())
+    )
+    stem = original_name[:-len(suffix)]
+
+    architecture_pattern = "|".join(
+        re.escape(architecture) for architecture in ARCHITECTURES
+    )
+    match = re.match(
+        rf"^(?P<label>.+)-"
+        rf"(?P<version>[0-9][A-Za-z0-9.+~_-]*)\."
+        rf"(?P<architecture>{architecture_pattern})$",
+        stem,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return match.group("label")
+
+    return None
+
+
+def category(name):
+    original_name = unsplit(name).lower()
+
+    if original_name.endswith((".asc", ".sig", ".pub")):
+        return "verification"
+    if original_name.endswith(".sha512sums"):
+        return "checksums"
+    if original_name.endswith(".torrent"):
+        return "torrents"
+    if original_name.endswith(".dm-buildinfo"):
+        return "buildinfo"
+    if is_primary(name):
+        return "primary"
+    return "buildinfo"
 
 
 def size(path):
     value = path.stat().st_size
     for unit in ("B", "K", "M", "G", "T"):
         if value < 1024 or unit == "T":
-            return f"{value:.0f}{unit}" if unit == "B" else f"{value:.1f}{unit}"
+            if unit == "B":
+                return f"{value:.0f}{unit}"
+            return f"{value:.1f}{unit}"
         value /= 1024
 
 
@@ -71,50 +119,89 @@ def digest(path, algorithm):
     return result.hexdigest()
 
 
+def markdown_name(name):
+    return name.replace("|", r"\|").replace("`", r"\`")
+
+
 def link(path):
-    name = path.name.replace("|", r"\|")
+    label = markdown_name(path.name)
     url = f"{release_url}/{quote(path.name, safe='-._~')}"
-    return f"[`{name}`]({url})"
+    return f"[`{label}`]({url})"
 
 
 def artifact_type(name):
-    if ".qcow2.libvirt.xz" in name:
-        return "⚡ KVM / QEMU image"
-    if ".iso" in name:
-        return "💿 Live ISO"
-    if ".ova" in name:
-        return "🧊 VirtualBox Appliance"
+    lowered_name = unsplit(name).lower()
+    if ".qcow2.libvirt.xz" in lowered_name:
+        return "⚡ QEMU"
+    if lowered_name.endswith(".iso"):
+        return "💿 ISO"
+    if lowered_name.endswith(".ova"):
+        return "🧊 VirtualBox"
     return "📦 Download"
 
 
 files = sorted(path for path in staging.iterdir() if path.is_file())
 
-# Group files by flavor, discovering flavors from primary artifacts.
-flavors = {}
+labels = sorted(
+    {
+        label
+        for path in files
+        if (label := product_label(path.name)) is not None
+    },
+    key=str.casefold,
+)
+
+files_by_label = {label: [] for label in labels}
+support_files = []
+
+labels_by_length = sorted(labels, key=len, reverse=True)
+
 for path in files:
-    flavor = flavor_of(path.name)
-    if flavor:
-        flavors.setdefault(flavor, path.name)
+    matched_label = next(
+        (
+            label
+            for label in labels_by_length
+            if path.name.casefold().startswith(label.casefold())
+            and len(path.name) > len(label)
+            and path.name[len(label)] in "-."
+        ),
+        None,
+    )
+
+    if matched_label is not None:
+        files_by_label[matched_label].append(path)
+    else:
+        support_files.append(path)
 
 print("### 📦 Downloads\n")
 
-for flavor, example in flavors.items():
-    print(f"<details>\n<summary>🗂️ {flavor_label(example)}</summary>\n<br>\n")
-    flavor_files = [p for p in files if p.name.startswith(f"{flavor}-")]
+for label in labels:
+    label_files = sorted(files_by_label[label])
+    escaped_label = html.escape(label, quote=True)
 
-    for key, title, heading in CATEGORIES:
-        selected = [p for p in flavor_files if category(p.name) == key]
+    print(
+        f"<details>\n"
+        f"<summary>🗂️ {escaped_label}</summary>\n"
+        f"<br>\n"
+    )
+
+    for category_key, title, heading in CATEGORIES:
+        selected = [
+            path for path in label_files
+            if category(path.name) == category_key
+        ]
+
         print(f"<details>\n<summary>{title}</summary>\n")
 
         if not selected:
             print("No files in this category.\n")
-        elif key == "primary":
+        elif category_key == "primary":
             print("| Artifact | Production Image | Size | SHA-256 |")
             print("|---|---|---:|---|")
             for path in selected:
                 print(
-                    f"| {artifact_type(path.name)} | {link(path)} | {size(path)} "
-                    f"| `{digest(path, 'sha256')}` |"
+                    f"| {artifact_type(path.name)} | {link(path)} "
+                    f"| {size(path)} | `{digest(path, 'sha256')}` |"
                 )
             print()
         else:
@@ -128,44 +215,31 @@ for flavor, example in flavors.items():
 
     print("</details>\n")
 
-flavor_files = {
-    path for path in files
-    if any(path.name.startswith(f"{flavor}-") for flavor in flavors)
-}
-miscellaneous = [path for path in files if path not in flavor_files]
-
 print("<details>\n<summary>📄 Support Files</summary>\n")
-if miscellaneous:
-    print("| Artifact | Size |")
+
+if support_files:
+    print("| File | Size |")
     print("|---|---:|")
-    for path in miscellaneous:
+    for path in sorted(support_files):
         print(f"| {link(path)} | {size(path)} |")
     print()
 else:
     print("No support files.\n")
+
 print("</details>\n")
 
-# Summarize primary images, direct signatures, and flavor developer keys.
-important = set()
-for path in files:
-    if flavor_of(path.name):
-        important.add(path.name)
-        important.update(
-            sidecar
-            for sidecar in (f"{path.name}.asc", f"{path.name}.sig")
-            if (staging / sidecar).is_file()
-        )
-
-for flavor in flavors:
-    important.update(
-        path.name for path in files
-        if path.name.lower().startswith(f"{flavor.lower()}-")
-        and "developer" in path.name.lower()
-        and path.name.endswith(".asc")
+important = {
+    path.name
+    for path in files
+    if is_primary(path.name)
+    or (
+        path.name.startswith("derivative-maker-source-")
+        and path.name.lower().endswith(".xz")
     )
+}
 
 print("### 🔢 Quick SHA-512 Checksums\n")
-print("Verify all downloads using the provided checksums and signatures.\n")
+print("Verify the actual image and source archive downloads using these hashes.\n")
 print("```text")
 for name in sorted(important):
     print(f"{digest(staging / name, 'sha512')}  {name}")

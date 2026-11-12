@@ -74,10 +74,12 @@ ssh -i ./id_ed25519 -p 2222 \
      ALLOW_UNFROZEN='${ALLOW_UNFROZEN:-}' \
      ALLOW_REMOTE='${ALLOW_REMOTE:-}' \
      ENGINE='${ENGINE:-}' \
+     RELEASE_TAG='${RELEASE_TAG:-}' \
      CHOSEN_VERSION='${CHOSEN_VERSION:-}' \
      GIT_URL='${GIT_URL:-}' \
      GIT_BRANCH='${GIT_BRANCH:-}' \
      GITHUB_TOKEN='${GITHUB_TOKEN:-}' \
+     GITHUB_SHA='${GITHUB_SHA:-}' \
      CI_PRIVATE_KEY='${CI_PRIVATE_KEY:-}' \
      KEY_DIR='${KEY_DIR:-/home/debian/.key_mnt}' \
      KEY_FILE='${KEY_FILE:-/home/debian/.key_mnt/my-private-key.asc}' \
