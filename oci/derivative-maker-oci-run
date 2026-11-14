@@ -94,7 +94,7 @@ parse_args() {
 
     COMMAND="${1}"
     shift
-    COMMAND_ARGS="${@:-}"
+    COMMAND_ARGS=("${@}")
 }
 
 validate_mount_path() {
@@ -148,7 +148,7 @@ container_image() {
             local active_label
             active_label=$(buildah inspect --format "{{index .OCIv1.Config.Labels \"${DM_SNAPSHOT_LABEL}\"}}" "${IMAGE_REF}" 2>/dev/null) || active_label=""
             ## Check if tracking tokens match perfectly
-            if [[ "${active_label}" == "${snapshot_ts}" && -n "${active_label}" ]]; then
+            if [[ "${ALLOW_UNFROZEN}" == "true" ]] || [[ "${active_label}" == "${snapshot_ts}" && -n "${active_label}" ]]; then
                     # Container image up to date but not loaded yet
                     engine_check_image || engine_sync_image
                     return 0
@@ -190,12 +190,25 @@ sudo ${ENGINE} run "${tty_opts[@]}" "${oci_run_opts[@]}" \
   --volume "${GNUPG_VOLUME}:/home/${OCI_USER}/.gnupg" \
   "${IMAGE_REF}"
 
-## Native user injection and exec OCI layer bypass broken internal 'sudo' tty constraints.
-sudo ${ENGINE} exec "${tty_opts[@]}" \
-  --workdir "/home/${OCI_USER}/derivative-maker" \
-  --user "${OCI_USER}" \
-  --env "flavor_meta_packages_to_install=${flavor_meta_packages_to_install:-}" \
-  --env "install_package_list=${install_package_list:-}" \
-  --env "DERIVATIVE_APT_REPOSITORY_OPTS=${DERIVATIVE_APT_REPOSITORY_OPTS:-}" \
-  "${CONTAINER_INSTANCE_NAME}" \
-  "${COMMAND}" ${COMMAND_ARGS}
+set +x
+  ## Native user injection and exec OCI layer bypass broken internal 'sudo' tty constraints.
+  sudo ${ENGINE} exec "${tty_opts[@]}" \
+    --workdir "/home/${OCI_USER}/derivative-maker" \
+    --user "${OCI_USER}" \
+    --env "DERIVATIVE_APT_REPOSITORY_OPTS=${DERIVATIVE_APT_REPOSITORY_OPTS:-}" \
+    --env "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
+    --env "RELEASE_TAG=${RELEASE_TAG:-}" \
+    --env "CHOSEN_VERSION=${CHOSEN_VERSION:-}" \
+    --env "DEBFULLNAME=${DEBFULLNAME:-}" \
+    --env "DEBEMAIL=${DEBEMAIL:-}" \
+    --env "flavor_meta_packages_to_install=${flavor_meta_packages_to_install:-}" \
+    --env "install_package_list=${install_package_list:-}" \
+    --env "flavors_list=${flavors_list:-}" \
+    --env "dist_build_target_arch=${dist_build_target_arch:-}" \
+    --env "dist_build_multi_target_list=${dist_build_multi_target_list:-}" \
+    --env "dist_build_version_type=${dist_build_version_type:-}" \
+    --env "dist_build_freshness=${dist_build_freshness:-}" \
+    --env "dist_build_redistributable=${dist_build_redistributable:-}" \
+    "${CONTAINER_INSTANCE_NAME}" \
+    "${COMMAND}" "${COMMAND_ARGS[@]}"
+set -x

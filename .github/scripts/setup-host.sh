@@ -19,7 +19,7 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=kvm
 
 echo "Installing QEMU and Cloud-Init Tools on Host..."
-sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils genisoimage netcat-openbsd
+sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils genisoimage netcat-openbsd python3
 
 echo "Downloading Minimal OS Base & Allocate Space Pool..."
 TARGET_URL="https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"

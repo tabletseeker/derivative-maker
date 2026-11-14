@@ -1,140 +1,175 @@
-name: Derivative-Maker CI
+name: Derivative Maker CI
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      flavor:
-        description: 'Target Flavor configuration'
-        required: true
-        default: 'kicksecure-lxqt'
-        type: choice
-        options:
-          - 'kicksecure-lxqt'
-          - 'kicksecure-cli'
-          - 'whonix-gateway-xfce'
-          - 'whonix-workstation-xfce'
-          - 'whonix-gateway-cli'
-          - 'whonix-workstation-cli'
-      arch:
-        description: 'Target CPU Architecture'
-        required: true
-        default: 'amd64'
-        type: choice
-        options:
-          - 'amd64'
-          - 'arm64'
-      target:
-        description: 'Build Target output wrapper format'
-        required: true
-        default: 'qcow2'
-        type: choice
-        options:
-          - 'qcow2'
-          - 'raw'
-          - 'ova'
-          - 'iso'
-      type:
-        description: 'System Footprint Environment Type'
-        required: true
-        default: 'vm'
-        type: choice
-        options:
-          - 'vm'
-          - 'container'
-          - 'base'
-          - 'host'
-      freshness:
-        description: 'Apt repository freshness profile'
-        required: true
-        default: 'frozen'
-        type: choice
-        options:
-          - 'frozen'
-          - 'stable'
-          - 'testers'
-          - 'developers'
-      container_engine:
-        description: 'Container Engine running the build process'
-        required: true
-        default: 'podman'
-        type: string
-      allow_uncommitted:
-        description: 'Allow uncommitted'
-        required: true
-        default: false
-        type: boolean
-      allow_unfrozen:
-        description: 'Allow unfrozen sources'
-        required: true
-        default: false
-        type: boolean
-      version:
-        description: 'Release version code'
+      release_name:
+        description: "Production Label"
         required: false
-        default: '18.2.1.9'
+        type: string
+        default: "Production Release:"
+      release_flavor:
+        description: "Release Flavor Label"
+        required: false
+        type: string
+        default: ""
+      flavors_list:
+        description: "Flavor List"
+        required: false
+        type: string
+        default: "kicksecure-lxqt"
+      dist_build_multi_target_list:
+        description: "Target List"
+        required: false
+        type: string
+        default: "qcow2"
+      arch:
+        description: "Target CPU Architecture"
+        required: false
+        type: string
+        default: "amd64"
+      type:
+        description: "System Footprint Type"
+        required: false
+        type: string
+        default: "vm"
+      freshness:
+        description: "APT Sources Freshness"
+        required: false
+        type: string
+        default: "frozen"
+      container_engine:
+        description: "Container Engine"
+        required: false
+        type: string
+        default: "podman"
+      dist_build_redistributable:
+        description: "Production Release"
+        required: false
+        type: boolean
+        default: true
+      allow_untagged:
+        description: "Allow Untagged"
+        required: false
+        type: boolean
+        default: false
+      allow_uncommitted:
+        description: "Allow Uncommitted"
+        required: false
+        type: boolean
+        default: false
+      allow_unfrozen:
+        description: "Allow Unfrozen Sources"
+        required: false
+        type: boolean
+        default: false
+      remote_derivative_packages:
+        description: "Remote Packages"
+        required: false
+        type: boolean
+        default: false
+      version:
+        description: "Release Version"
+        required: false
+        type: string
+        default: ""
+      release_tag:
+        description: "Full release tag"
+        required: true
         type: string
       flavor_meta_packages_to_install:
-        description: 'Extra meta packages to install inside the container'
+        description: "Extra Meta Packages"
         required: false
-        default: ''
         type: string
+        default: ""
       install_package_list:
-        description: 'Individual specific packages to append'
+        description: "Extra Package List"
         required: false
-        default: ''
         type: string
+        default: ""
       derivative_apt_repository_opts:
-        description: 'Custom APT repository option flags'
+        description: "Custom APT Repo"
         required: false
-        default: ''
         type: string
+        default: ""
+      debfullname:
+        description: "Key Owner Identity"
+        required: false
+        type: string
+        default: "tabletseeker-ci"
+      debemail:
+        description: "Key Owner E-mail"
+        required: false
+        type: string
+        default: "tabletseeker-ci@github.com"
+
+    secrets:
+      CI_PRIVATE_KEY:
+        required: true
 
 jobs:
-  nested-vm-build:
+  dm-build-official:
+    name: official
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    steps:
-      - name: Checkout Repository Code
-        uses: actions/checkout@v4
 
-      - name: Initialize and Clean Host Environment
+    env:
+      BUILD_ARCH: ${{ inputs.arch }}
+      BUILD_TYPE: ${{ inputs.type }}
+      BUILD_FRESHNESS: ${{ inputs.freshness }}
+      ENGINE: ${{ inputs.container_engine }}
+      DERIVATIVE_APT_REPOSITORY_OPTS: ${{ inputs.derivative_apt_repository_opts }}
+      CHOSEN_VERSION: ${{ inputs.version }}
+      ALLOW_UNTAGGED: ${{ inputs.allow_untagged }}
+      ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
+      ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
+      ALLOW_REMOTE: ${{ inputs.remote_derivative_packages }}
+      DEBFULLNAME: ${{ inputs.debfullname }}
+      DEBEMAIL: ${{ inputs.debemail }}
+      flavors_list: ${{ inputs.flavors_list }}
+      dist_build_target_arch: ${{ inputs.arch }}
+      dist_build_multi_target_list: ${{ inputs.dist_build_multi_target_list }}
+      dist_build_version_type: ${{ inputs.type }}
+      dist_build_freshness: ${{ inputs.freshness }}
+      dist_build_redistributable: ${{ inputs.dist_build_redistributable }}
+      flavor_meta_packages: ${{ inputs.flavor_meta_packages_to_install }}
+      install_package_list: ${{ inputs.install_package_list }}
+
+    steps:
+      - name: Checkout core repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: false
+
+      - name: Setup and clean host
+        shell: bash
         run: |
-          chmod +x .github/scripts/setup-host.sh
           ./.github/scripts/setup-host.sh
 
-      - name: Compile and Execute Guest OS Build
+      - name: Execute build pipeline
+        shell: bash
         env:
-          BUILD_FLAVOR: ${{ inputs.flavor }}
-          BUILD_ARCH: ${{ inputs.arch }}
-          BUILD_TARGET: ${{ inputs.target }}
-          BUILD_TYPE: ${{ inputs.type }}
-          BUILD_FRESHNESS: ${{ inputs.freshness }}
-          ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
-          ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
-          ENGINE: ${{ inputs.container_engine }}
-          FLAVOR_META_PACKAGES: ${{ inputs.flavor_meta_packages_to_install }}
-          INSTALL_PACKAGE_LIST: ${{ inputs.install_package_list }}
-          DERIVATIVE_APT_OPTS: ${{ inputs.derivative_apt_repository_opts }}
+          CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          KEY_DIR: "/home/debian/.key_mnt"
+          KEY_FILE: "/home/debian/.key_mnt/my-private-key.asc"
+          GIT_URL: "https://github.com/tabletseeker/derivative-maker"
+          GIT_BRANCH: ${{ github.ref_name }}
         run: |
-          chmod +x .github/scripts/build-guest.sh
           ./.github/scripts/build-guest.sh
 
-      - name: Gather, Process, and Publish Release Artifacts
+      - name: Collect and upload artifacts
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BUILD_FLAVOR: ${{ inputs.flavor }}
-          BUILD_ARCH: ${{ inputs.arch }}
-          BUILD_TARGET: ${{ inputs.target }}
-          BUILD_TYPE: ${{ inputs.type }}
-          BUILD_FRESHNESS: ${{ inputs.freshness }}
-          ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
-          ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
-          ENGINE: ${{ inputs.container_engine }}
-          CHOSEN_VERSION: ${{ inputs.version }}
-          FLAVOR_META_PACKAGES: ${{ inputs.flavor_meta_packages_to_install }}
-          INSTALL_PACKAGE_LIST: ${{ inputs.install_package_list }}
-          DERIVATIVE_APT_OPTS: ${{ inputs.derivative_apt_repository_opts }}
+          RELEASE_NAME: ${{ inputs.release_name }}
+          RELEASE_FLAVOR: ${{ inputs.release_flavor }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GIT_URL: "https://github.com/tabletseeker/derivative-maker"
         run: |
-          chmod +x .github/scripts/gather-artifacts.sh
           ./.github/scripts/gather-artifacts.sh

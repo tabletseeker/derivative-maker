@@ -1,0 +1,13 @@
+{
+  "id": "kicksecure-lxqt-amd64-vm",
+  "release_flavor": "Kicksecure-LXQt",
+  "flavors_list": "kicksecure-lxqt",
+  "arch": "amd64",
+  "target": "virtualbox qcow2",
+  "type": "vm",
+  "container_engine": "podman",
+  "flavor_meta_packages_to_install": "",
+  "install_package_list": "",
+  "derivative_apt_repository_opts": ""
+}
+
