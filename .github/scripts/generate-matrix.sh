@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -138,3 +137,4 @@ matrix="$(jq -c -s '.' "${FILES[@]}")"
 
 printf 'Selected %d asset(s): %s\n' "${#FILES[@]}" "${ASSET_IDS[*]}"
 printf 'matrix=%s\n' "${matrix}" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
+

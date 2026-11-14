@@ -10,32 +10,31 @@ shopt -s shift_verbose
 
 VM_WORKDIR="/home/debian/build-workspace"
 
-# Prep signing key for key_mnt
 echo "[+] Guest Subsystem: Initializing key space..."
 mkdir -p "${KEY_DIR}"
+
+# Keep the private key out of xtrace output.
 set +x
-  printf '%s\n' "${CI_PRIVATE_KEY}" > "${KEY_FILE}"
-  chmod 400 "${KEY_FILE}"
+printf '%s' "${CI_PRIVATE_KEY}" > "${KEY_FILE}"
+chmod 400 "${KEY_FILE}"
 set -x
 
-# Apt automation
 echo "[+] Pre-configuring package manager for non-interactive automation..."
 sudo mkdir -p /etc/apt/apt.conf.d
-sudo tee /etc/apt/apt.conf.d/99force-noninteractive > /dev/null << 'EOF'
+sudo tee /etc/apt/apt.conf.d/99force-noninteractive > /dev/null <<'EOF'
 Dpkg::Options { "--force-confnew"; "--force-confdef"; };
 APT::Get::Assume-Yes "true";
 APT::Get::List-Cleanup "false";
 EOF
 
-# Provision dependencies
 echo "[+] Installing compilation system requirements..."
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update
-sudo apt-get install -y -q git qemu-utils coreutils curl gnupg sq \
+sudo apt-get install -y -q \
+  git qemu-utils coreutils curl gnupg sq \
   systemd systemd-container iptables sudo lsb-release podman buildah uidmap \
   dbus-user-session moreutils
 
-# Keep session alive after tty disconnect
 sudo loginctl enable-linger debian
 
 echo "[+] Initializing unprivileged namespace pools..."
@@ -44,8 +43,7 @@ if ! grep -q "debian" /etc/subuid; then
   echo "debian:100000:65536" | sudo tee -a /etc/subgid
 fi
 
-# Second clone with submodules
-echo "[+] Sourcing repository down into workspace context..."
+echo "[+] Cloning repository into guest workspace..."
 mkdir -p "${VM_WORKDIR}"
 
 git clone \

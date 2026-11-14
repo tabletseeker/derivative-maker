@@ -3,105 +3,86 @@ name: Derivative Maker CI
 on:
   workflow_call:
     inputs:
-      release_name:
-        description: "Production Label"
-        required: false
-        type: string
-        default: "Production Release:"
       release_flavor:
-        description: "Release Flavor Label"
-        required: false
+        description: "Release flavor label"
+        required: true
         type: string
-        default: ""
+      artifact_id:
+        description: "Unique matrix artifact ID"
+        required: true
+        type: string
       flavors_list:
-        description: "Flavor List"
-        required: false
+        description: "Flavor list passed to the build"
+        required: true
         type: string
-        default: "kicksecure-lxqt"
       dist_build_multi_target_list:
-        description: "Target List"
-        required: false
+        description: "Output target"
+        required: true
         type: string
-        default: "qcow2"
       arch:
-        description: "Target CPU Architecture"
-        required: false
+        description: "Target CPU architecture"
+        required: true
         type: string
-        default: "amd64"
       type:
-        description: "System Footprint Type"
-        required: false
+        description: "System footprint type"
+        required: true
         type: string
-        default: "vm"
       freshness:
-        description: "APT Sources Freshness"
-        required: false
+        description: "APT sources freshness"
+        required: true
         type: string
-        default: "frozen"
       container_engine:
-        description: "Container Engine"
-        required: false
+        description: "Container engine"
+        required: true
         type: string
-        default: "podman"
       dist_build_redistributable:
-        description: "Production Release"
-        required: false
+        description: "Whether the output is redistributable"
+        required: true
         type: boolean
-        default: true
       allow_untagged:
-        description: "Allow Untagged"
-        required: false
+        description: "Allow untagged sources"
+        required: true
         type: boolean
-        default: false
       allow_uncommitted:
-        description: "Allow Uncommitted"
-        required: false
+        description: "Allow uncommitted source changes"
+        required: true
         type: boolean
-        default: false
       allow_unfrozen:
-        description: "Allow Unfrozen Sources"
-        required: false
+        description: "Allow unfrozen sources"
+        required: true
         type: boolean
-        default: false
       remote_derivative_packages:
-        description: "Remote Packages"
-        required: false
+        description: "Use remote derivative packages"
+        required: true
         type: boolean
-        default: false
       version:
-        description: "Release Version"
-        required: false
+        description: "Resolved build version"
+        required: true
         type: string
-        default: ""
       release_tag:
-        description: "Full release tag"
+        description: "Resolved release tag"
         required: true
         type: string
       flavor_meta_packages_to_install:
-        description: "Extra Meta Packages"
+        description: "Additional meta packages"
         required: false
         type: string
-        default: ""
       install_package_list:
-        description: "Extra Package List"
+        description: "Additional packages"
         required: false
         type: string
-        default: ""
       derivative_apt_repository_opts:
-        description: "Custom APT Repo"
+        description: "Custom APT repository options"
         required: false
         type: string
-        default: ""
       debfullname:
-        description: "Key Owner Identity"
-        required: false
+        description: "Signing-key owner name"
+        required: true
         type: string
-        default: "tabletseeker-ci"
       debemail:
-        description: "Key Owner E-mail"
-        required: false
+        description: "Signing-key owner email"
+        required: true
         type: string
-        default: "tabletseeker-ci@github.com"
 
     secrets:
       CI_PRIVATE_KEY:
@@ -109,10 +90,10 @@ on:
 
 jobs:
   dm-build-official:
-    name: official
+    name: ${{ inputs.version }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     env:
       BUILD_ARCH: ${{ inputs.arch }}
@@ -121,6 +102,8 @@ jobs:
       ENGINE: ${{ inputs.container_engine }}
       DERIVATIVE_APT_REPOSITORY_OPTS: ${{ inputs.derivative_apt_repository_opts }}
       CHOSEN_VERSION: ${{ inputs.version }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      RELEASE_FLAVOR: ${{ inputs.release_flavor }}
       ALLOW_UNTAGGED: ${{ inputs.allow_untagged }}
       ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
       ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
@@ -133,11 +116,12 @@ jobs:
       dist_build_version_type: ${{ inputs.type }}
       dist_build_freshness: ${{ inputs.freshness }}
       dist_build_redistributable: ${{ inputs.dist_build_redistributable }}
-      flavor_meta_packages: ${{ inputs.flavor_meta_packages_to_install }}
+      flavor_meta_packages_to_install: ${{ inputs.flavor_meta_packages_to_install }}
       install_package_list: ${{ inputs.install_package_list }}
+      BUILD_ARTIFACT_ID: ${{ inputs.artifact_id }}
 
     steps:
-      - name: Checkout core repository
+      - name: Checkout build source
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
@@ -145,31 +129,31 @@ jobs:
           fetch-tags: true
           submodules: false
 
-      - name: Setup and clean host
+      - name: Set up and clean host
         shell: bash
-        run: |
-          ./.github/scripts/setup-host.sh
+        run: ./.github/scripts/setup-host.sh
 
       - name: Execute build pipeline
         shell: bash
         env:
           CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
           KEY_DIR: "/home/debian/.key_mnt"
           KEY_FILE: "/home/debian/.key_mnt/my-private-key.asc"
-          GIT_URL: "https://github.com/tabletseeker/derivative-maker"
+          GIT_URL: "https://github.com/${{ github.repository }}"
           GIT_BRANCH: ${{ github.ref_name }}
-        run: |
-          ./.github/scripts/build-guest.sh
+        run: ./.github/scripts/build-guest.sh
 
-      - name: Collect and upload artifacts
+      - name: Gather and stage artifacts
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_NAME: ${{ inputs.release_name }}
-          RELEASE_FLAVOR: ${{ inputs.release_flavor }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          GIT_URL: "https://github.com/tabletseeker/derivative-maker"
-        run: |
-          ./.github/scripts/gather-artifacts.sh
+          GIT_URL: "https://github.com/${{ github.repository }}"
+        run: ./.github/scripts/gather-artifacts.sh
+
+      - name: Upload staged build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: derivative-${{ github.run_id }}-${{ inputs.artifact_id }}
+          path: release-staging/
+          if-no-files-found: error
+          retention-days: 1

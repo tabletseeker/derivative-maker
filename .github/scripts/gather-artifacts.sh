@@ -7,14 +7,9 @@ set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
 
-if [[ "${TRACE:-false}" == "true" ]]; then
-  set -x
-fi
-
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 STAGING_DIR="${WORKSPACE_DIR}/release-staging"
-REPO_ROOT="${REPO_ROOT:-${WORKSPACE_DIR}}"
 BUILD_LOG="${SCRIPT_DIR}/build.log"
 RENDERER="${SCRIPT_DIR}/release-display.py"
 RELEASE_NOTES_FILE="${WORKSPACE_DIR}/release_notes.md"
@@ -22,12 +17,31 @@ RUNNER_USER="$(id -un)"
 RUNNER_GROUP="$(id -gn)"
 GIT_URL="${GIT_URL:-${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-tabletseeker/derivative-maker}}"
 BUILD_LABEL="${RELEASE_FLAVOR:-${flavors_list:-build}}"
-BUILD_ID="${BUILD_LABEL,,}-${GITHUB_RUN_ID:-local}"
+BUILD_ID="${BUILD_ARTIFACT_ID:-${BUILD_LABEL,,}-${GITHUB_RUN_ID:-local}}"
 CHECKSUM_FILE="SHA256SUMS-${BUILD_ID}"
 BUILD_LOG_FILE="build-${BUILD_ID}.log"
 BUILD_NOTES_FILE="${BUILD_ID}-release-notes.md"
 
-# Start clean so a previous run cannot add stale assets to this release.
+should_skip_release_file() {
+  local filename="${1##*/}"
+
+  case "${filename}" in
+    mullvad-keyring.asc|\
+    oracle_vbox_2016.asc|\
+    tbb-team.asc|\
+    torprojectarchive.asc)
+      return 0
+      ;;
+  esac
+
+  [[ "${filename}" =~ ^[[:xdigit:]]{40}\.asc$ ]]
+}
+
+if [[ -z "${RELEASE_TAG:-}" ]]; then
+  echo "ERROR: RELEASE_TAG must be provided by the workflow." >&2
+  exit 1
+fi
+
 rm -rf -- "${STAGING_DIR}"
 mkdir -p -- "${STAGING_DIR}"
 
@@ -68,10 +82,15 @@ else
   echo "WARNING: Build log not found at ${BUILD_LOG}" >&2
 fi
 
+if ! find "${STAGING_DIR}" -maxdepth 1 -type f -print -quit | grep -q .; then
+  echo "ERROR: No build artifacts were collected." >&2
+  exit 1
+fi
+
 echo "=== Fix ownership of container-created build artifacts ==="
 sudo chown -R "${RUNNER_USER}:${RUNNER_GROUP}" "${STAGING_DIR}"
 
-echo "=== Split oversized files to respect release limits ==="
+echo "=== Split oversized files to respect upload limits ==="
 find "${STAGING_DIR}" -maxdepth 1 -type f -print0 |
   while IFS= read -r -d '' asset; do
     file_size_mb="$(du -m -- "${asset}" | cut -f1)"
@@ -87,13 +106,11 @@ if [[ ! -f "${RENDERER}" ]]; then
   exit 1
 fi
 
-if [[ "${BUILD_ARCH:-amd64}" == "amd64" ]]; then
-  ARCH_NAME="Intel_AMD64"
-elif [[ "${BUILD_ARCH:-}" == "arm64" ]]; then
-  ARCH_NAME="ARM64"
-else
-  ARCH_NAME="${BUILD_ARCH:-unknown}"
-fi
+case "${BUILD_ARCH:-unknown}" in
+  amd64) ARCH_NAME="Intel_AMD64" ;;
+  arm64) ARCH_NAME="ARM64" ;;
+  *) ARCH_NAME="${BUILD_ARCH:-unknown}" ;;
+esac
 
 if [[ "${ALLOW_UNCOMMITTED:-false}" == "true" ]]; then
   GIT_CLEAN_STR="⚠️ Allowing Uncommitted"
@@ -108,15 +125,14 @@ else
   FROZEN_SRC_STR="✅ Frozen"
 fi
 
-if [[ -z "${RELEASE_TAG:-}" ]]; then
-  echo "ERROR: RELEASE_TAG must be provided by the workflow." >&2
-  exit 1
-fi
-
 BUILD_TARGET_UPPER="${dist_build_multi_target_list:-}"
 BUILD_TARGET_UPPER="${BUILD_TARGET_UPPER^^}"
 BUILD_TYPE_UPPER="${BUILD_TYPE:-}"
 BUILD_TYPE_UPPER="${BUILD_TYPE_UPPER^^}"
+
+META_ROW=""
+PKG_ROW=""
+APT_ROW=""
 
 if [[ -n "${flavor_meta_packages:-}" ]]; then
   META_ROW="| **Custom Meta Packages Added** | \`${flavor_meta_packages}\` |"
@@ -131,7 +147,7 @@ fi
 cat <<EOF > "${RELEASE_NOTES_FILE}"
 <!-- matrix-build:${BUILD_ID} -->
 
-## ${RELEASE_FLAVOR:-${flavors_list:-}} ${RELEASE_TAG%%-*} (${ARCH_NAME} ${BUILD_TARGET_UPPER} ${BUILD_TYPE_UPPER})
+## ${RELEASE_FLAVOR:-${flavors_list:-unknown}} ${CHOSEN_VERSION:-unknown} (${ARCH_NAME} ${BUILD_TARGET_UPPER} ${BUILD_TYPE_UPPER})
 
 | Parameter | Build Option |
 | :--- | :--- |
@@ -143,54 +159,46 @@ cat <<EOF > "${RELEASE_NOTES_FILE}"
 | **Container Build Engine** | \`${ENGINE:-unknown}\` |
 | **Frozen Sources Status** | ${FROZEN_SRC_STR} |
 | **Enforcing Clean Git** | ${GIT_CLEAN_STR} |
-| **Release Version Tag** | \`${CHOSEN_VERSION:-${RELEASE_TAG%%-*}}\` |
+| **Release Version Tag** | \`${CHOSEN_VERSION:-unknown}\` |
 
 EOF
 
-[[ -z "${META_ROW:-}" ]] || printf '%s\n' "${META_ROW}" >> "${RELEASE_NOTES_FILE}"
-[[ -z "${PKG_ROW:-}" ]] || printf '%s\n' "${PKG_ROW}" >> "${RELEASE_NOTES_FILE}"
-[[ -z "${APT_ROW:-}" ]] || printf '%s\n' "${APT_ROW}" >> "${RELEASE_NOTES_FILE}"
+[[ -z "${META_ROW}" ]] || printf '%s\n' "${META_ROW}" >> "${RELEASE_NOTES_FILE}"
+[[ -z "${PKG_ROW}" ]] || printf '%s\n' "${PKG_ROW}" >> "${RELEASE_NOTES_FILE}"
+[[ -z "${APT_ROW}" ]] || printf '%s\n' "${APT_ROW}" >> "${RELEASE_NOTES_FILE}"
 
-echo "=== Render flavor menus and SHA-512 summary ==="
+echo "=== Render flavor menu and SHA-512 summary ==="
 python3 "${RENDERER}" \
   "${STAGING_DIR}" \
   "${GIT_URL}" \
   "${RELEASE_TAG}" \
   >> "${RELEASE_NOTES_FILE}"
 
-# Unique asset is downloaded by the single publisher job after
-# all matrix jobs finish.
 cp -- "${RELEASE_NOTES_FILE}" "${STAGING_DIR}/${BUILD_NOTES_FILE}"
 
 echo "=== Generate build-specific SHA256SUMS ==="
 (
   cd -- "${STAGING_DIR}"
+
   rm -f -- "${CHECKSUM_FILE}"
-  find . -maxdepth 1 -type f ! -name "${CHECKSUM_FILE}" -print0 |
-    xargs -0 -r sha256sum > "${CHECKSUM_FILE}"
+
+  find . -maxdepth 1 -type f -print0 |
+    sort -z |
+    while IFS= read -r -d '' file; do
+      filename="${file#./}"
+
+      [[ "${filename}" == "${CHECKSUM_FILE}" ]] && continue
+      [[ "${filename}" == *-release-notes.md ]] && continue
+
+      if should_skip_release_file "${filename}"; then
+        continue
+      fi
+
+      sha256sum -- "${filename}"
+    done > "${CHECKSUM_FILE}"
+
   cat "${CHECKSUM_FILE}"
 )
 
 echo "=== Final staging layout ==="
 ls -lh "${STAGING_DIR}"
-
-# The prepare-release job must create this release before the matrix begins.
-if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-  echo "ERROR: Expected release '${RELEASE_TAG}' to exist before artifact upload." >&2
-  echo "Check the prepare-release job and GITHUB_TOKEN permissions." >&2
-  exit 1
-fi
-
-mapfile -d '' -t STAGED_ASSETS < <(
-  find "${STAGING_DIR}" -maxdepth 1 -type f -print0 | sort -z
-)
-
-if [[ "${#STAGED_ASSETS[@]}" -eq 0 ]]; then
-  echo "ERROR: No staged assets to upload." >&2
-  exit 1
-fi
-
-echo "INFO: Uploading this runner's assets to release '${RELEASE_TAG}'."
-gh release upload "${RELEASE_TAG}" "${STAGED_ASSETS[@]}"
-
-echo "=== Release assets processing complete. ==="

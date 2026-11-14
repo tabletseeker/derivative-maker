@@ -19,7 +19,7 @@ release_url = (
 
 CATEGORIES = (
     ("primary", "🏁 Primary Downloads", "Production Image"),
-    ("verification", "🔐 Verification", "OpenPGP & Signature"),
+    ("verification", "🔐 OpenPGP & Signature", "Cryptographic Assets"),
     ("checksums", "📋 Checksums", "SHA-512 Checksums"),
     ("torrents", "🧲 Torrents", "Torrent File"),
     ("buildinfo", "ℹ️ Build Information", "Build Metadata"),
@@ -57,7 +57,7 @@ def is_primary(name):
 
 
 def product_label(name):
-    """Infer the product label from the filename of a primary asset."""
+    """Infer a product label from a primary asset filename."""
     if not is_primary(name):
         return None
 
@@ -79,10 +79,25 @@ def product_label(name):
         stem,
         flags=re.IGNORECASE,
     )
-    if match:
-        return match.group("label")
+    return match.group("label") if match else None
 
-    return None
+
+def product_version(name, label):
+    """Extract the numeric version for display in a product heading."""
+    original_name = unsplit(name)
+    suffix = next(
+        suffix
+        for suffix in PRIMARY_SUFFIXES
+        if original_name.lower().endswith(suffix.lower())
+    )
+    stem = original_name[:-len(suffix)]
+
+    match = re.match(
+        rf"^{re.escape(label)}-(?P<version>[0-9]+(?:\.[0-9]+)*)",
+        stem,
+        flags=re.IGNORECASE,
+    )
+    return match.group("version") if match else None
 
 
 def category(name):
@@ -153,7 +168,6 @@ labels = sorted(
 
 files_by_label = {label: [] for label in labels}
 support_files = []
-
 labels_by_length = sorted(labels, key=len, reverse=True)
 
 for path in files:
@@ -177,7 +191,17 @@ print("### 📦 Downloads\n")
 
 for label in labels:
     label_files = sorted(files_by_label[label])
-    escaped_label = html.escape(label, quote=True)
+    version = next(
+        (
+            version
+            for path in label_files
+            if is_primary(path.name)
+            and (version := product_version(path.name, label)) is not None
+        ),
+        None,
+    )
+    display_label = f"{label}-{version}" if version else label
+    escaped_label = html.escape(display_label, quote=True)
 
     print(
         f"<details>\n"
@@ -219,7 +243,7 @@ print("<details>\n<summary>📄 Support Files</summary>\n")
 
 if support_files:
     print("| File | Size |")
-    print("|---|---:|---|")
+    print("|---|---:|")
     for path in sorted(support_files):
         print(f"| {link(path)} | {size(path)} |")
     print()
@@ -247,7 +271,10 @@ important = {
 }
 
 print("### 🔢 Quick SHA-512 Checksums\n")
-print("Verify all images and source archives using the provided hashes, signatures and keys.\n")
+print(
+    "Verify all images and source archives using the provided hashes, "
+    "signatures and keys.\n"
+)
 print("```text")
 for name in sorted(important):
     print(f"{digest(staging / name, 'sha512')}  {name}")

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -47,11 +46,15 @@ tail -f vm_output.log | sed 's/^/[VM LOG] /' &
 TAIL_PID=$!
 
 echo "Waiting for guest OS initialization..."
-until ssh -i ./id_ed25519 -p 2222 \
-          -o StrictHostKeyChecking=no \
-          -o ConnectTimeout=2 \
-          -o PasswordAuthentication=no \
-          debian@127.0.0.1 "true" 2>/dev/null; do
+until ssh \
+  -i ./id_ed25519 \
+  -p 2222 \
+  -o StrictHostKeyChecking=no \
+  -o ConnectTimeout=2 \
+  -o PasswordAuthentication=no \
+  debian@127.0.0.1 \
+  "true" 2>/dev/null
+do
   sleep 2
 done
 
@@ -84,8 +87,8 @@ ssh -i ./id_ed25519 -p 2222 \
      KEY_DIR='${KEY_DIR:-/home/debian/.key_mnt}' \
      KEY_FILE='${KEY_FILE:-/home/debian/.key_mnt/my-private-key.asc}' \
      DERIVATIVE_APT_REPOSITORY_OPTS='${DERIVATIVE_APT_REPOSITORY_OPTS:-}' \
-     flavor_meta_packages_to_install='${FLAVOR_META_PACKAGES:-}' \
-     install_package_list='${INSTALL_PACKAGE_LIST:-}' \
+     flavor_meta_packages_to_install='${flavor_meta_packages_to_install:-}' \
+     install_package_list='${install_package_list:-}' \
      flavors_list='${flavors_list:-}' \
      dist_build_target_arch='${dist_build_target_arch:-}' \
      dist_build_multi_target_list='${dist_build_multi_target_list:-}' \
