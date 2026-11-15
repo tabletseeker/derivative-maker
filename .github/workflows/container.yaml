@@ -133,6 +133,42 @@ jobs:
         shell: bash
         run: ./.github/scripts/setup-host.sh
 
+      - name: Resolve Debian Cloud Image State
+        id: cloud-images
+        shell: bash
+        run: |
+          ref="$(bash ./.github/scripts/build-debian-vm-base.sh --resolve)"
+          echo "Resolved Debian Cloud Team revision: ${ref}"
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Debian Trixie Base Image
+        id: cache-base-image
+        uses: actions/cache@v5
+        with:
+          path: debian-base.qcow2
+          key: >-
+            ${{ format(
+              'debian-12-base-{0}-{1}',
+              steps.cloud-images.outputs.ref,
+              hashFiles(
+                '.github/scripts/build-debian-vm-base.sh',
+                '.github/scripts/setup-host.sh'
+              )
+            ) }}
+
+      - name: Build Debian Trixie Base Image
+        if: steps.cache-base-image.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          CLOUD_IMAGES_REF: ${{ steps.cloud-images.outputs.ref }}
+        run: bash ./.github/scripts/build-debian-vm-base.sh debian-base.qcow2 75G
+
+      - name: Verify base image is present
+        shell: bash
+        run: |
+          test -s debian-base.qcow2
+          qemu-img info debian-base.qcow2
+
       - name: Execute build pipeline
         shell: bash
         env:
@@ -140,14 +176,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KEY_DIR: "/home/debian/.key_mnt"
           KEY_FILE: "/home/debian/.key_mnt/my-private-key.asc"
-          GIT_URL: "https://github.com/${{ github.repository }}"
+          GIT_URL: "${{ github.server_url }}/${{ github.repository }}"
           GIT_BRANCH: ${{ github.ref_name }}
         run: ./.github/scripts/build-guest.sh
 
       - name: Gather and stage artifacts
         shell: bash
         env:
-          GIT_URL: "https://github.com/${{ github.repository }}"
+          GIT_URL: "${{ github.server_url }}/${{ github.repository }}"
         run: ./.github/scripts/gather-artifacts.sh
 
       - name: Upload staged build outputs

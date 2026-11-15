@@ -4,7 +4,6 @@
 ## This script is executed on the host with the purpose of setting up
 ## required volume directories and executing the <container-engine> run command with any given arguments.
 
-set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -29,13 +28,13 @@ BINARY_VOLUME="${HOME}/binary_mnt"
 CACHER_VOLUME="${HOME}/approx_cache_mnt"
 KEY_VOLUME="${HOME}/.key_mnt"
 GNUPG_VOLUME="${HOME}/.gnupg_mnt"
+INTERACTIVE="false"
 
-[ -v CI ] || CI=""
 declare -a tty_opts=()
 declare -a oci_run_opts=()
 
-if [ "${CI:-}" = "true" ]; then
-  tty_opts+=( --tty --env 'CI=true' )
+if [ "${INTERACTIVE:-false}" = "false" ]; then
+  tty_opts+=( --tty )
 else
   tty_opts+=( --interactive --tty )
 fi
@@ -190,25 +189,25 @@ sudo ${ENGINE} run "${tty_opts[@]}" "${oci_run_opts[@]}" \
   --volume "${GNUPG_VOLUME}:/home/${OCI_USER}/.gnupg" \
   "${IMAGE_REF}"
 
-set +x
-  ## Native user injection and exec OCI layer bypass broken internal 'sudo' tty constraints.
-  sudo ${ENGINE} exec "${tty_opts[@]}" \
-    --workdir "/home/${OCI_USER}/derivative-maker" \
-    --user "${OCI_USER}" \
-    --env "DERIVATIVE_APT_REPOSITORY_OPTS=${DERIVATIVE_APT_REPOSITORY_OPTS:-}" \
-    --env "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
-    --env "RELEASE_TAG=${RELEASE_TAG:-}" \
-    --env "CHOSEN_VERSION=${CHOSEN_VERSION:-}" \
-    --env "DEBFULLNAME=${DEBFULLNAME:-}" \
-    --env "DEBEMAIL=${DEBEMAIL:-}" \
-    --env "flavor_meta_packages_to_install=${flavor_meta_packages_to_install:-}" \
-    --env "install_package_list=${install_package_list:-}" \
-    --env "flavors_list=${flavors_list:-}" \
-    --env "dist_build_target_arch=${dist_build_target_arch:-}" \
-    --env "dist_build_multi_target_list=${dist_build_multi_target_list:-}" \
-    --env "dist_build_version_type=${dist_build_version_type:-}" \
-    --env "dist_build_freshness=${dist_build_freshness:-}" \
-    --env "dist_build_redistributable=${dist_build_redistributable:-}" \
-    "${CONTAINER_INSTANCE_NAME}" \
-    "${COMMAND}" "${COMMAND_ARGS[@]}"
-set -x
+## Native user injection and exec OCI layer bypass broken internal 'sudo' tty constraints.
+sudo ${ENGINE} exec "${tty_opts[@]}" \
+  --workdir "/home/${OCI_USER}/derivative-maker" \
+  --user "${OCI_USER}" \
+  --env "DERIVATIVE_APT_REPOSITORY_OPTS=${DERIVATIVE_APT_REPOSITORY_OPTS:-}" \
+  --env "GITHUB_TOKEN=${GITHUB_TOKEN:-}" \
+  --env "RELEASE_TAG=${RELEASE_TAG:-}" \
+  --env "CHOSEN_VERSION=${CHOSEN_VERSION:-}" \
+  --env "DEBFULLNAME=${DEBFULLNAME:-}" \
+  --env "DEBEMAIL=${DEBEMAIL:-}" \
+  --env "flavor_meta_packages_to_install=${flavor_meta_packages_to_install:-}" \
+  --env "install_package_list=${install_package_list:-}" \
+  --env "flavors_list=${flavors_list:-}" \
+  --env "dist_build_interactive=${INTERACTIVE}" \
+  --env "dist_build_target_arch=${dist_build_target_arch:-}" \
+  --env "dist_build_multi_target_list=${dist_build_multi_target_list:-}" \
+  --env "dist_build_version_type=${dist_build_version_type:-}" \
+  --env "dist_build_freshness=${dist_build_freshness:-}" \
+  --env "dist_build_redistributable=${dist_build_redistributable:-}" \
+  "${CONTAINER_INSTANCE_NAME}" \
+  "${COMMAND}" "${COMMAND_ARGS[@]}"
+

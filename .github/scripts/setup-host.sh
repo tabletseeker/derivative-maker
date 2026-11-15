@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-set -xe
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
 
 echo "=== Storage profile before cleaning ==="
 df -h /
+
 sudo swapoff -a || true
 sudo rm -f /mnt/swapfile
 sudo rm -rf \
@@ -12,28 +19,47 @@ sudo rm -rf \
   /opt/hostedtoolcache/CodeQL \
   /usr/local/share/powershell \
   /usr/local/share/chromium
+
 sudo docker image prune --all --force
 sudo apt-get remove --purge -y "node*" "php*" "mysql*" "google*" || true
 sudo apt-get autoremove -y
 sudo apt-get clean
 
-echo "=== Storage profile after aggressive cleaning ==="
+echo "=== Storage profile after cleaning ==="
 df -h /
 
-echo "Expose Host KVM Permissions..."
+echo "=== Expose host KVM permissions ==="
 echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
-  sudo tee /etc/udev/rules.d/99-kvm4all.rules
+  sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
 sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=kvm
 
-echo "Installing QEMU and Cloud-Init Tools on Host..."
+echo "=== Install QEMU, cloud-init, and Debian image-build dependencies ==="
 sudo apt-get update
-sudo apt-get install -y \
-  qemu-system-x86 qemu-utils cloud-image-utils genisoimage \
-  netcat-openbsd python3
+sudo apt-get install -y --no-install-recommends \
+  ca-certificates \
+  cloud-image-utils \
+  debsums \
+  dosfstools \
+  fai-server \
+  fai-setup-storage \
+  genisoimage \
+  git \
+  make \
+  debian-archive-keyring \
+  netcat-openbsd \
+  fdisk \
+  sudo \
+  python3 \
+  python3-httpx \
+  python3-libcloud \
+  python3-marshmallow \
+  python3-pytest \
+  python3-yaml \
+  qemu-system-x86 \
+  qemu-utils \
+  udev
 
-echo "Downloading Minimal OS Base & Allocate Space Pool..."
-TARGET_URL="https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"
-curl -L -o debian-base.qcow2 "${TARGET_URL}"
-qemu-img resize -f qcow2 debian-base.qcow2 75G
+echo "=== Host setup complete ==="
+df -h /
 

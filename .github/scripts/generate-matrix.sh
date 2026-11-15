@@ -136,5 +136,6 @@ fi
 matrix="$(jq -c -s '.' "${FILES[@]}")"
 
 printf 'Selected %d asset(s): %s\n' "${#FILES[@]}" "${ASSET_IDS[*]}"
+printf 'Generated matrix: %s\n' "${matrix}"
 printf 'matrix=%s\n' "${matrix}" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
 

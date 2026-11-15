@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -10,32 +11,17 @@ shopt -s shift_verbose
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 STAGING_DIR="${WORKSPACE_DIR}/release-staging"
-BUILD_LOG="${SCRIPT_DIR}/build.log"
-RENDERER="${SCRIPT_DIR}/release-display.py"
+BUILD_LOG="${WORKSPACE_DIR}/build.log"
+RENDERER="${SCRIPT_DIR}/render-notes.py"
 RELEASE_NOTES_FILE="${WORKSPACE_DIR}/release_notes.md"
 RUNNER_USER="$(id -un)"
 RUNNER_GROUP="$(id -gn)"
 GIT_URL="${GIT_URL:-${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-tabletseeker/derivative-maker}}"
 BUILD_LABEL="${RELEASE_FLAVOR:-${flavors_list:-build}}"
 BUILD_ID="${BUILD_ARTIFACT_ID:-${BUILD_LABEL,,}-${GITHUB_RUN_ID:-local}}"
-CHECKSUM_FILE="SHA256SUMS-${BUILD_ID}"
 BUILD_LOG_FILE="build-${BUILD_ID}.log"
 BUILD_NOTES_FILE="${BUILD_ID}-release-notes.md"
-
-should_skip_release_file() {
-  local filename="${1##*/}"
-
-  case "${filename}" in
-    mullvad-keyring.asc|\
-    oracle_vbox_2016.asc|\
-    tbb-team.asc|\
-    torprojectarchive.asc)
-      return 0
-      ;;
-  esac
-
-  [[ "${filename}" =~ ^[[:xdigit:]]{40}\.asc$ ]]
-}
+PID_FILE="${WORKSPACE_DIR}/qemu.pid"
 
 if [[ -z "${RELEASE_TAG:-}" ]]; then
   echo "ERROR: RELEASE_TAG must be provided by the workflow." >&2
@@ -75,6 +61,29 @@ find . -type f \
 
 tar --create --file=- --null --files-from="${file_list}"
 REMOTE
+
+# Shutting down VM after tar stream
+if sudo test -f "${PID_FILE}"; then
+  pid="$(sudo cat "${PID_FILE}")"
+
+  if [[ -n "${pid}" ]] && sudo kill -0 "${pid}" 2>/dev/null; then
+    echo "=== Shutting down guest VM cleanly (PID: ${pid}) ==="
+    ssh -i "${WORKSPACE_DIR}/id_ed25519" -p 2222 \
+      -o StrictHostKeyChecking=no \
+      -o PasswordAuthentication=no \
+      -o ConnectTimeout=5 \
+      debian@127.0.0.1 "sudo poweroff" 2>/dev/null || true
+
+    if ! sudo timeout 30s pidwait "${pid}" 2>/dev/null; then
+      echo "=== Guest shutdown timed out; stopping QEMU (PID: ${pid}) ==="
+      sudo kill -TERM "${pid}" 2>/dev/null || true
+      sudo timeout 5s pidwait "${pid}" 2>/dev/null || sudo kill -KILL "${pid}" 2>/dev/null || true
+    fi
+  fi
+
+  sudo rm -f -- "${PID_FILE}"
+  sync
+fi
 
 if [[ -f "${BUILD_LOG}" ]]; then
   cp -- "${BUILD_LOG}" "${STAGING_DIR}/${BUILD_LOG_FILE}"
@@ -176,29 +185,6 @@ python3 "${RENDERER}" \
 
 cp -- "${RELEASE_NOTES_FILE}" "${STAGING_DIR}/${BUILD_NOTES_FILE}"
 
-echo "=== Generate build-specific SHA256SUMS ==="
-(
-  cd -- "${STAGING_DIR}"
-
-  rm -f -- "${CHECKSUM_FILE}"
-
-  find . -maxdepth 1 -type f -print0 |
-    sort -z |
-    while IFS= read -r -d '' file; do
-      filename="${file#./}"
-
-      [[ "${filename}" == "${CHECKSUM_FILE}" ]] && continue
-      [[ "${filename}" == *-release-notes.md ]] && continue
-
-      if should_skip_release_file "${filename}"; then
-        continue
-      fi
-
-      sha256sum -- "${filename}"
-    done > "${CHECKSUM_FILE}"
-
-  cat "${CHECKSUM_FILE}"
-)
-
 echo "=== Final staging layout ==="
 ls -lh "${STAGING_DIR}"
+

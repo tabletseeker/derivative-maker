@@ -5,7 +5,7 @@ on:
     inputs:
       build_mode:
         description: "Build mode"
-        required: true
+        required: false
         default: "release"
         type: choice
         options:
@@ -14,8 +14,8 @@ on:
 
       matrix_assets:
         description: "Matrix asset selection"
-        required: true
-        default: "all"
+        required: false
+        default: "all-amd64-kvm"
         type: string
 
       version_prefix:

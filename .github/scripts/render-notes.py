@@ -38,6 +38,7 @@ PRIMARY_SUFFIXES = (
 )
 
 ARCHITECTURES = ("Intel_AMD64", "ARM64", "amd64", "arm64")
+ARCHITECTURE_PATTERN = "|".join(re.escape(arch) for arch in ARCHITECTURES)
 
 
 def unsplit(name):
@@ -69,13 +70,10 @@ def product_label(name):
     )
     stem = original_name[:-len(suffix)]
 
-    architecture_pattern = "|".join(
-        re.escape(architecture) for architecture in ARCHITECTURES
-    )
     match = re.match(
         rf"^(?P<label>.+)-"
-        rf"(?P<version>[0-9][A-Za-z0-9.+~_-]*)\."
-        rf"(?P<architecture>{architecture_pattern})$",
+        rf"(?P<version>[A-Za-z0-9][A-Za-z0-9.+~_-]*)\."
+        rf"(?P<architecture>{ARCHITECTURE_PATTERN})$",
         stem,
         flags=re.IGNORECASE,
     )
@@ -83,7 +81,7 @@ def product_label(name):
 
 
 def product_version(name, label):
-    """Extract the numeric version for display in a product heading."""
+    """Extract the numeric/version-like component for display."""
     original_name = unsplit(name)
     suffix = next(
         suffix
@@ -93,7 +91,9 @@ def product_version(name, label):
     stem = original_name[:-len(suffix)]
 
     match = re.match(
-        rf"^{re.escape(label)}-(?P<version>[0-9]+(?:\.[0-9]+)*)",
+        rf"^{re.escape(label)}-"
+        rf"(?P<version>[A-Za-z0-9][A-Za-z0-9.+~_-]*)\."
+        rf"(?P<architecture>{ARCHITECTURE_PATTERN})$",
         stem,
         flags=re.IGNORECASE,
     )
@@ -279,3 +279,4 @@ print("```text")
 for name in sorted(important):
     print(f"{digest(staging / name, 'sha512')}  {name}")
 print("```")
+

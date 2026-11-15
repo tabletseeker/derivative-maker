@@ -30,7 +30,7 @@ if [[ "${EVENT_NAME}" == "schedule" ]]; then
     "0 6 * * *")
       build_mode="nightly"
       matrix_assets="all-amd64-kvm"
-      release_name="Nightly Release:"
+      release_name="Nightly Build:"
       dist_build_redistributable="false"
       freshness="current"
       allow_unfrozen="true"

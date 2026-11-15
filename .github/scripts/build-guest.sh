@@ -8,6 +8,7 @@ shopt -s inherit_errexit
 shopt -s shift_verbose
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE}")" && pwd)"
+WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 
 # Ephemeral loopback network setup
 echo "Generating an ephemeral SSH keypair on the host runner..."
@@ -23,16 +24,17 @@ users:
 EOF
 
 touch meta-data vm_output.log
-chmod 666 vm_output.log
+chmod 600 vm_output.log
 cloud-localds cloud-init.img user-data meta-data
 
 # Launch QEMU Instance Engine
 echo "Launching hardware-accelerated QEMU instance..."
 sudo qemu-system-x86_64 \
   -enable-kvm \
-  -m 6G \
+  -m 8G \
   -smp 4 \
   -cpu host \
+  -pidfile "${WORKSPACE_DIR}/qemu.pid" \
   -drive file=debian-base.qcow2,format=qcow2,if=virtio \
   -drive file=cloud-init.img,format=raw,if=virtio,id=cloud \
   -boot order=c \
@@ -95,7 +97,7 @@ ssh -i ./id_ed25519 -p 2222 \
      dist_build_version_type='${dist_build_version_type:-}' \
      dist_build_freshness='${dist_build_freshness:-}' \
      dist_build_redistributable='${dist_build_redistributable:-}' \
-     sudo -E -u debian bash -s" < "${SCRIPT_DIR}/vm-payload.sh" 2>&1 | tee "${SCRIPT_DIR}/build.log"
+     sudo -E -u debian bash -s" < "${SCRIPT_DIR}/vm-payload.sh" 2>&1 | tee "${WORKSPACE_DIR}/build.log"
 
 echo "[+] Workspace artifact build block completed. Keeping VM alive for extraction phase."
 

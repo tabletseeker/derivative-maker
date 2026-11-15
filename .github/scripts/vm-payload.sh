@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -14,10 +13,8 @@ echo "[+] Guest Subsystem: Initializing key space..."
 mkdir -p "${KEY_DIR}"
 
 # Keep the private key out of xtrace output.
-set +x
 printf '%s' "${CI_PRIVATE_KEY}" > "${KEY_FILE}"
 chmod 400 "${KEY_FILE}"
-set -x
 
 echo "[+] Pre-configuring package manager for non-interactive automation..."
 sudo mkdir -p /etc/apt/apt.conf.d

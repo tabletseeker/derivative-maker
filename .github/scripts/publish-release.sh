@@ -135,14 +135,6 @@ compose_release_notes() {
     exit 1
   fi
 
-  if [[ "${BUILD_MODE}" == "nightly" ]]; then
-    printf '# Nightly build %s\n\n' "${BUILD_VERSION}" > "${NOTES_FILE}"
-  else
-    printf '# %s %s\n\n' \
-      "${RELEASE_TITLE:-Production Release:}" \
-      "${BUILD_VERSION}" > "${NOTES_FILE}"
-  fi
-
   for note_file in "${NOTE_FILES[@]}"; do
     printf '\n---\n\n' >> "${NOTES_FILE}"
     cat -- "${note_file}" >> "${NOTES_FILE}"
@@ -291,7 +283,7 @@ publish_nightly_assets() {
   delete_stale_nightly_assets
 
   gh release edit "${RELEASE_TAG}" \
-    --title "Nightly build ${BUILD_VERSION}" \
+    --title "${RELEASE_TITLE:-Nightly Build:} ${BUILD_VERSION}" \
     --notes-file "${NOTES_FILE}" \
     --prerelease
 }
@@ -324,3 +316,4 @@ main() {
 }
 
 main "$@"
+
