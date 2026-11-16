@@ -98,11 +98,14 @@ git -C "${REPO_ROOT}" config tag.gpgSign true
 git -C "${REPO_ROOT}" remote set-url origin \
   "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" || true
 
-if git -C "${REPO_ROOT}" rev-parse --verify "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
-  echo "INFO: tag ${RELEASE_TAG} already exists locally. Skipping creation."
+head_commit="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+tag_commit="$(git -C "${REPO_ROOT}" rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}" 2>/dev/null || true)"
+
+if [[ "${tag_commit}" == "${head_commit}" ]]; then
+  echo "INFO: tag ${RELEASE_TAG} already points to HEAD (${head_commit}). Skipping creation."
 else
-  echo "INFO: tag ${RELEASE_TAG} is absent locally. Generating initial signed tag..."
-  git -C "${REPO_ROOT}" tag -s -m "release: ${RELEASE_TAG}" "${RELEASE_TAG}"
+  echo "INFO: tag ${RELEASE_TAG} is absent or points to ${tag_commit:-none}; signing onto HEAD (${head_commit})..."
+  git -C "${REPO_ROOT}" tag -s -f -m "${BUILD_MODE}: ${RELEASE_TAG}" "${RELEASE_TAG}" HEAD
 fi
 
 # Verify the tag.

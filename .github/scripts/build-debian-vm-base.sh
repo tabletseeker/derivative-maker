@@ -83,7 +83,7 @@ case "${1:-}" in
     ;;
   --validate)
     CLOUD_IMAGES_REF="$(get_cloud_images_ref)"
-    printf 'Using Debian Cloud Team revision: %s\n' "${CLOUD_IMAGES_REF}"
+    printf 'Using Debian Cloud Team Revision: %s\n' "${CLOUD_IMAGES_REF}"
     exit 0
     ;;
   -*)
@@ -98,7 +98,7 @@ DISK_SIZE="${2:-75G}"
 CLOUD_IMAGES_REF="$(get_cloud_images_ref)"
 
 [[ "${DISK_SIZE}" =~ ${SIZE_REGEX} ]] || die "DISK_SIZE must be a positive size ending in G, M, or T."
-require_commands git make qemu-img sudo
+require_commands git make qemu-img sha512sum sudo
 
 if [[ "$(dpkg --print-architecture)" != "amd64" ]]; then
   die "This script builds the generic amd64 image and requires an amd64 runner."
@@ -111,12 +111,13 @@ WORK_DIR="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/debian-cloud-image.XXXXXX
 SOURCE_DIR="${WORK_DIR}/source"
 BUILD_OUTPUT_DIR="${WORK_DIR}/output"
 TEMP_QCOW2="${OUT_QCOW2}.tmp.$$"
+BUILDINFO_TMP="${OUT_QCOW2}.buildinfo.tmp.$$"
 
 cleanup() {
   local status=$?
   trap - EXIT
   sudo rm -rf -- "${WORK_DIR}" || true
-  sudo rm -f -- "${TEMP_QCOW2}" || true
+  sudo rm -f -- "${TEMP_QCOW2}" "${BUILDINFO_TMP}" || true
   exit "${status}"
 }
 trap cleanup EXIT
@@ -197,5 +198,16 @@ sudo qemu-img check -f qcow2 "${TEMP_QCOW2}"
 sudo chown "$(id -u):$(id -g)" "${TEMP_QCOW2}"
 mv -f -- "${TEMP_QCOW2}" "${OUT_QCOW2}"
 
+image_sha512="$(sha512sum -- "${OUT_QCOW2}" | awk '{print $1}')"
+
+cat <<EOF > "${BUILDINFO_TMP}"
+CLOUD_IMAGES_REF=${actual_ref}
+DISK_SIZE=${DISK_SIZE}
+SHA512=${image_sha512}
+EOF
+
+mv -f -- "${BUILDINFO_TMP}" "${OUT_QCOW2}.buildinfo"
+
 log "Base image ready"
 qemu-img info "${OUT_QCOW2}"
+cat -- "${OUT_QCOW2}.buildinfo"

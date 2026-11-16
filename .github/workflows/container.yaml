@@ -3,6 +3,10 @@ name: Derivative Maker CI
 on:
   workflow_call:
     inputs:
+      build_mode:
+        description: "Release or Nightly"
+        required: true
+        type: string
       release_flavor:
         description: "Release flavor label"
         required: true
@@ -96,6 +100,7 @@ jobs:
       contents: read
 
     env:
+      BUILD_MODE: ${{ inputs.build_mode }}
       BUILD_ARCH: ${{ inputs.arch }}
       BUILD_TYPE: ${{ inputs.type }}
       BUILD_FRESHNESS: ${{ inputs.freshness }}
@@ -145,14 +150,17 @@ jobs:
         id: cache-base-image
         uses: actions/cache@v5
         with:
-          path: debian-base.qcow2
+          path: |
+            debian-base.qcow2
+            debian-base.qcow2.buildinfo
           key: >-
             ${{ format(
-              'debian-12-base-{0}-{1}',
+              'debian-trixie-base-{0}-{1}',
               steps.cloud-images.outputs.ref,
               hashFiles(
                 '.github/scripts/build-debian-vm-base.sh',
-                '.github/scripts/setup-host.sh'
+                '.github/scripts/setup-host.sh',
+                '.github/scripts/verify-debian-vm-base.sh'
               )
             ) }}
 
@@ -163,11 +171,13 @@ jobs:
           CLOUD_IMAGES_REF: ${{ steps.cloud-images.outputs.ref }}
         run: bash ./.github/scripts/build-debian-vm-base.sh debian-base.qcow2 75G
 
-      - name: Verify base image is present
+      - name: Verify Debian Trixie Base Image
         shell: bash
-        run: |
-          test -s debian-base.qcow2
-          qemu-img info debian-base.qcow2
+        run: >-
+          bash ./.github/scripts/verify-debian-vm-base.sh
+          --ref "${{ steps.cloud-images.outputs.ref }}"
+          --size 75G
+          debian-base.qcow2
 
       - name: Execute build pipeline
         shell: bash

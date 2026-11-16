@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -32,35 +31,25 @@ rm -rf -- "${STAGING_DIR}"
 mkdir -p -- "${STAGING_DIR}"
 
 echo "=== Streaming build artifacts out of the guest ==="
-
 ssh -i ./id_ed25519 -p 2222 \
   -o StrictHostKeyChecking=no \
   -o PasswordAuthentication=no \
   -o KbdInteractiveAuthentication=no \
-  debian@127.0.0.1 bash -s <<'REMOTE' \
-  | tar --extract --file=- --directory="${STAGING_DIR}" --transform='s|.*/||'
-set -euo pipefail
-
-cd /home/debian/binary_mnt
-file_list="$(mktemp)"
-trap 'rm -f "${file_list}"' EXIT
-
-find . -type f \
-  \( -name '*Kicksecure*.xz' \
-     -o -name '*Whonix*.xz' \
-     -o -name 'derivative-maker-source-*.xz' \
-     -o -name '*.iso' \
-     -o -name '*.ova' \
-     -o -name '*.asc' \
-     -o -name '*.sig' \
-     -o -name '*.sha512sums' \
-     -o -name '*.dm-buildinfo' \
-     -o -name '*.torrent' \
-     -o -name '*.log' \) \
-  -print0 > "${file_list}"
-
-tar --create --file=- --null --files-from="${file_list}"
-REMOTE
+  debian@127.0.0.1 \
+  "find /home/debian/binary_mnt -type f \
+   \( -name '*Kicksecure*.xz' \
+      -o -name '*Whonix*.xz' \
+      -o -name '*.iso' \
+      -o -name '*.ova' \
+      -o -name '*.asc' \
+      -o -name '*.sig' \
+      -o -name '*.sha512sums' \
+      -o -name '*.dm-buildinfo' \
+      -o -name '*.torrent' \
+      -o -name '*.log' \
+      -o -name 'derivative-maker-source-*.xz' \) \
+      -print0 | xargs -0 tar -cf -" \
+  | tar -xSf - -i --transform='s|.*/||' -C "${STAGING_DIR}"
 
 # Shutting down VM after tar stream
 if sudo test -f "${PID_FILE}"; then

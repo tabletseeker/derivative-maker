@@ -27,6 +27,10 @@ touch meta-data vm_output.log
 chmod 600 vm_output.log
 cloud-localds cloud-init.img user-data meta-data
 
+# Create copy-on-write overlay to enable caching of base debian-base.qcow2
+rm -f -- build-work.qcow2
+qemu-img create -f qcow2 -F qcow2 -b debian-base.qcow2 build-work.qcow2
+
 # Launch QEMU Instance Engine
 echo "Launching hardware-accelerated QEMU instance..."
 sudo qemu-system-x86_64 \
@@ -35,7 +39,7 @@ sudo qemu-system-x86_64 \
   -smp 4 \
   -cpu host \
   -pidfile "${WORKSPACE_DIR}/qemu.pid" \
-  -drive file=debian-base.qcow2,format=qcow2,if=virtio \
+  -drive file=build-work.qcow2,format=qcow2,if=virtio \
   -drive file=cloud-init.img,format=raw,if=virtio,id=cloud \
   -boot order=c \
   -nographic \
@@ -69,6 +73,7 @@ ssh -i ./id_ed25519 -p 2222 \
     "XDG_RUNTIME_DIR=/run/user/1000 \
      DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/1000/bus' \
      PATH='/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' \
+     BUILD_MODE='${BUILD_MODE:-}' \
      BUILD_ARCH='${BUILD_ARCH:-}' \
      BUILD_TYPE='${BUILD_TYPE:-}' \
      DEBFULLNAME='${DEBFULLNAME:-}' \

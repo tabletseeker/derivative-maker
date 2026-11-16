@@ -201,6 +201,7 @@ jobs:
         include: ${{ fromJSON(needs.select-matrix-assets.outputs.matrix) }}
     uses: ./.github/workflows/container.yaml
     with:
+      build_mode: ${{ needs.resolve-config.outputs.build_mode }}
       freshness: ${{ needs.resolve-config.outputs.freshness }}
       dist_build_redistributable: ${{ needs.resolve-config.outputs.dist_build_redistributable == 'true' }}
       allow_untagged: ${{ needs.resolve-config.outputs.allow_untagged == 'true' }}

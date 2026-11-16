@@ -199,6 +199,7 @@ sudo ${ENGINE} exec "${tty_opts[@]}" \
   --env "CHOSEN_VERSION=${CHOSEN_VERSION:-}" \
   --env "DEBFULLNAME=${DEBFULLNAME:-}" \
   --env "DEBEMAIL=${DEBEMAIL:-}" \
+  --env "BUILD_MODE=${BUILD_MODE:-}" \
   --env "flavor_meta_packages_to_install=${flavor_meta_packages_to_install:-}" \
   --env "install_package_list=${install_package_list:-}" \
   --env "flavors_list=${flavors_list:-}" \
