@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+## Copyright (C) 2026-2027 tabletseeker <tabletseeker-git@protonmail.com>
+## See the LICENSE for conditions of reproduction or redistribution.
+## All rights reserved by the repository maintainer
+
 set -o errexit
 set -o nounset
 set -o pipefail
