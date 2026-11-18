@@ -72,6 +72,14 @@ get_cloud_images_ref() {
   fi
 }
 
+cleanup() {
+  local status=$?
+  trap - EXIT
+  sudo rm -rf -- "${WORK_DIR}" || true
+  sudo rm -f -- "${TEMP_QCOW2}" "${BUILDINFO_TMP}" || true
+  exit "${status}"
+}
+
 case "${1:-}" in
   -h|--help)
     usage
@@ -113,13 +121,6 @@ BUILD_OUTPUT_DIR="${WORK_DIR}/output"
 TEMP_QCOW2="${OUT_QCOW2}.tmp.$$"
 BUILDINFO_TMP="${OUT_QCOW2}.buildinfo.tmp.$$"
 
-cleanup() {
-  local status=$?
-  trap - EXIT
-  sudo rm -rf -- "${WORK_DIR}" || true
-  sudo rm -f -- "${TEMP_QCOW2}" "${BUILDINFO_TMP}" || true
-  exit "${status}"
-}
 trap cleanup EXIT
 
 mkdir -p -- "${SOURCE_DIR}" "${BUILD_OUTPUT_DIR}"

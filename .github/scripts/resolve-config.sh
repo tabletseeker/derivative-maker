@@ -23,6 +23,7 @@ allow_unfrozen="${INPUT_ALLOW_UNFROZEN:-false}"
 remote_derivative_packages="${INPUT_REMOTE_DERIVATIVE_PACKAGES:-false}"
 debfullname="${INPUT_DEBFULLNAME:-tabletseeker-ci}"
 debemail="${INPUT_DEBEMAIL:-tabletseeker-ci@github.com}"
+cleanup="${INPUT_CLEANUP:-false}"
 
 # Cron-specific overrides
 if [[ "${EVENT_NAME}" == "schedule" ]]; then
@@ -62,5 +63,6 @@ allow_unfrozen=${allow_unfrozen}
 remote_derivative_packages=${remote_derivative_packages}
 debfullname=${debfullname}
 debemail=${debemail}
+cleanup=${cleanup}
 EOF
 

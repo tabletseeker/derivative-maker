@@ -7,26 +7,33 @@ set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
 
-echo "=== Storage profile before cleaning ==="
+prune_host() {
+if [ "${CLEANUP}" == "true" ]; then
+  sudo swapoff -a || true
+  sudo rm -f /mnt/swapfile
+  sudo rm -rf \
+    /usr/share/dotnet \
+    /usr/local/lib/android \
+    /opt/ghc \
+    /opt/hostedtoolcache/CodeQL \
+    /usr/local/share/powershell \
+    /usr/local/share/chromium
+
+  sudo docker image prune --all --force
+  sudo apt-get remove --purge -y "node*" "php*" "mysql*" "google*" || true
+  sudo apt-get autoremove -y
+  sudo apt-get clean
+
+  echo "=== Storage Profile After Cleanup ==="
+  df -h /
+else
+  echo "=== Skipping Cleanup Sequence ==="
+fi
+}
+
+echo "=== Native Storage Profile ==="
 df -h /
-
-sudo swapoff -a || true
-sudo rm -f /mnt/swapfile
-sudo rm -rf \
-  /usr/share/dotnet \
-  /usr/local/lib/android \
-  /opt/ghc \
-  /opt/hostedtoolcache/CodeQL \
-  /usr/local/share/powershell \
-  /usr/local/share/chromium
-
-sudo docker image prune --all --force
-sudo apt-get remove --purge -y "node*" "php*" "mysql*" "google*" || true
-sudo apt-get autoremove -y
-sudo apt-get clean
-
-echo "=== Storage profile after cleaning ==="
-df -h /
+prune_host
 
 echo "=== Expose host KVM permissions ==="
 echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |

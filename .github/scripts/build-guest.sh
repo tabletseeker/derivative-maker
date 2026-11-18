@@ -9,6 +9,7 @@ shopt -s shift_verbose
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE}")" && pwd)"
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
+VM_HELPER="${SCRIPT_DIR}/vm-sync-helper.sh"
 
 # Ephemeral loopback network setup
 echo "Generating an ephemeral SSH keypair on the host runner..."
@@ -18,13 +19,13 @@ cat > user-data <<EOF
 #cloud-config
 users:
   - name: debian
+    shell: /bin/bash
     ssh_authorized_keys:
       - $(cat ./id_ed25519.pub)
     sudo: ALL=(ALL) NOPASSWD:ALL
 EOF
 
 touch meta-data vm_output.log
-chmod 600 vm_output.log
 cloud-localds cloud-init.img user-data meta-data
 
 # Create copy-on-write overlay to enable caching of base debian-base.qcow2
@@ -48,25 +49,28 @@ sudo qemu-system-x86_64 \
   -serial file:vm_output.log &
 
 echo "Streaming Guest OS /dev/ttyS0"
-tail -f vm_output.log | sed 's/^/[VM LOG] /' &
+tail -f vm_output.log > >(sed 's/^/[VM LOG] /') &
 TAIL_PID=$!
 
 echo "Waiting for guest OS initialization..."
-until ssh \
-  -i ./id_ed25519 \
-  -p 2222 \
-  -o StrictHostKeyChecking=no \
-  -o ConnectTimeout=2 \
-  -o PasswordAuthentication=no \
-  debian@127.0.0.1 \
-  "true" 2>/dev/null
-do
+until "${VM_HELPER}" exec true >/dev/null 2>&1; do
   sleep 2
 done
+
+# Wait for actual cloud init pass
+"${VM_HELPER}" exec cloud-init status --wait >/dev/null || true
+
+echo "VM Boot completed successfully. Ending tty stream."
+kill "${TAIL_PID}" 2>/dev/null || true
+
+# Load saved approx cache
+"${VM_HELPER}" restore-cache "${WORKSPACE_DIR}/approx-cache.tar.zst"
 
 echo "Host runner: Executing deployment pipeline..."
 ssh -i ./id_ed25519 -p 2222 \
     -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o LogLevel=ERROR \
     -o ConnectTimeout=15 \
     -o ConnectionAttempts=5 \
     debian@127.0.0.1 \

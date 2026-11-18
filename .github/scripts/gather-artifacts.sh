@@ -20,6 +20,7 @@ BUILD_LABEL="${RELEASE_FLAVOR:-${flavors_list:-build}}"
 BUILD_ID="${BUILD_ARTIFACT_ID:-${BUILD_LABEL,,}-${GITHUB_RUN_ID:-local}}"
 BUILD_LOG_FILE="build-${BUILD_ID}.log"
 BUILD_NOTES_FILE="${BUILD_ID}-release-notes.md"
+VM_HELPER="${SCRIPT_DIR}/vm-sync-helper.sh"
 PID_FILE="${WORKSPACE_DIR}/qemu.pid"
 
 if [[ -z "${RELEASE_TAG:-}" ]]; then
@@ -30,59 +31,19 @@ fi
 rm -rf -- "${STAGING_DIR}"
 mkdir -p -- "${STAGING_DIR}"
 
-echo "=== Streaming build artifacts out of the guest ==="
-ssh -i ./id_ed25519 -p 2222 \
-  -o StrictHostKeyChecking=no \
-  -o PasswordAuthentication=no \
-  -o KbdInteractiveAuthentication=no \
-  debian@127.0.0.1 \
-  "find /home/debian/binary_mnt -type f \
-   \( -name '*Kicksecure*.xz' \
-      -o -name '*Whonix*.xz' \
-      -o -name '*.iso' \
-      -o -name '*.ova' \
-      -o -name '*.asc' \
-      -o -name '*.sig' \
-      -o -name '*.sha512sums' \
-      -o -name '*.dm-buildinfo' \
-      -o -name '*.torrent' \
-      -o -name '*.log' \
-      -o -name 'derivative-maker-source-*.xz' \) \
-      -print0 | xargs -0 tar -cf -" \
-  | tar -xSf - -i --transform='s|.*/||' -C "${STAGING_DIR}"
+"${VM_HELPER}" pull-artifacts "${STAGING_DIR}"
+"${VM_HELPER}" save-cache "${WORKSPACE_DIR}/approx-cache.tar.zst"
+"${VM_HELPER}" shutdown-vm "${WORKSPACE_DIR}/qemu.pid"
 
-# Shutting down VM after tar stream
-if sudo test -f "${PID_FILE}"; then
-  pid="$(sudo cat "${PID_FILE}")"
-
-  if [[ -n "${pid}" ]] && sudo kill -0 "${pid}" 2>/dev/null; then
-    echo "=== Shutting down guest VM cleanly (PID: ${pid}) ==="
-    ssh -i "${WORKSPACE_DIR}/id_ed25519" -p 2222 \
-      -o StrictHostKeyChecking=no \
-      -o PasswordAuthentication=no \
-      -o ConnectTimeout=5 \
-      debian@127.0.0.1 "sudo poweroff" 2>/dev/null || true
-
-    if ! sudo timeout 30s pidwait "${pid}" 2>/dev/null; then
-      echo "=== Guest shutdown timed out; stopping QEMU (PID: ${pid}) ==="
-      sudo kill -TERM "${pid}" 2>/dev/null || true
-      sudo timeout 5s pidwait "${pid}" 2>/dev/null || sudo kill -KILL "${pid}" 2>/dev/null || true
-    fi
-  fi
-
-  sudo rm -f -- "${PID_FILE}"
-  sync
+if ! find "${STAGING_DIR}" -maxdepth 1 -type f -print -quit | grep -q .; then
+  echo "ERROR: No build artifacts were collected." >&2
+  exit 1
 fi
 
 if [[ -f "${BUILD_LOG}" ]]; then
   cp -- "${BUILD_LOG}" "${STAGING_DIR}/${BUILD_LOG_FILE}"
 else
   echo "WARNING: Build log not found at ${BUILD_LOG}" >&2
-fi
-
-if ! find "${STAGING_DIR}" -maxdepth 1 -type f -print -quit | grep -q .; then
-  echo "ERROR: No build artifacts were collected." >&2
-  exit 1
 fi
 
 echo "=== Fix ownership of container-created build artifacts ==="
