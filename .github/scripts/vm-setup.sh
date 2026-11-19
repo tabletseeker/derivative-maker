@@ -67,8 +67,14 @@ done
 echo "VM Boot completed successfully. Ending tty stream."
 kill "${TAIL_PID}" 2>/dev/null || true
 
+# Provision container toolchain before restoring caches
+"${VM_HELPER}" exec bash -s < "${SCRIPT_DIR}/vm-provision.sh"
+
 # Load saved approx cache
 "${VM_HELPER}" restore-cache "${WORKSPACE_DIR}/approx-cache.tar.zst"
+
+# Load saved Buildah OCI container image
+"${VM_HELPER}" restore-oci-image "${WORKSPACE_DIR}/oci-image.tar.zst"
 
 echo "Host runner: Executing deployment pipeline..."
 ssh -i ./id_ed25519 -p 2222 \
@@ -110,7 +116,7 @@ ssh -i ./id_ed25519 -p 2222 \
      dist_build_version_type='${dist_build_version_type:-}' \
      dist_build_freshness='${dist_build_freshness:-}' \
      dist_build_redistributable='${dist_build_redistributable:-}' \
-     sudo -E -u debian bash -s" < "${SCRIPT_DIR}/vm-payload.sh" 2>&1 | tee "${WORKSPACE_DIR}/build.log"
+     sudo -E -u debian bash -s" < "${SCRIPT_DIR}/vm-build.sh" 2>&1 | tee "${WORKSPACE_DIR}/build.log"
 
 echo "[+] Workspace artifact build block completed. Keeping VM alive for extraction phase."
 

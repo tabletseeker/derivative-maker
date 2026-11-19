@@ -160,17 +160,22 @@ jobs:
           echo "Resolved Debian Cloud Team revision: ${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
 
+      - name: Get Current ISO Week
+        id: iso-week
+        shell: bash
+        run: echo "week=$(date -u +%G-W%V)" | tee -a -- "${GITHUB_OUTPUT}"
+
       - name: Compute Weekly Approx Cache Key
         id: approx-key
         shell: bash
         run: |
-          prefix="approx-trixie-$(date -u +%G-W%V)-${{ inputs.arch }}-"
+          prefix="approx-trixie-${{ steps.iso-week.outputs.week }}-${{ inputs.arch }}-"
           echo "prefix=${prefix}" | tee -a -- "${GITHUB_OUTPUT}"
           echo "key=${prefix}${{ github.run_id }}-${{ inputs.artifact_id }}" | tee -a -- "${GITHUB_OUTPUT}"
 
-      - name: Cache Debian Trixie Base Image
-        id: cache-base-image
-        uses: actions/cache@v5
+      - name: Restore Debian Trixie Base Image
+        id: restore-base-image
+        uses: actions/cache/restore@v5
         with:
           path: |
             debian-base.qcow2
@@ -184,6 +189,35 @@ jobs:
                 '.github/scripts/setup-host.sh',
                 '.github/scripts/verify-debian-vm-base.sh'
               )
+            ) }}
+
+      - name: Cache Frozen OCI Image
+        if: ${{ !inputs.allow_unfrozen }}
+        uses: actions/cache@v5
+        with:
+          path: oci-image.tar.zst
+          key: >-
+            ${{ format(
+              'oci-trixie-frozen-{0}-{1}',
+              inputs.arch,
+              hashFiles(
+                'oci/*',
+                'build_sources/frozen-snapshot-timestamp',
+                'build_sources/debian_stable_frozen_direct_clearnet.sources.in'
+              )
+            ) }}
+
+      - name: Cache Unfrozen OCI Image
+        if: inputs.allow_unfrozen
+        uses: actions/cache@v5
+        with:
+          path: oci-image.tar.zst
+          key: >-
+            ${{ format(
+              'oci-trixie-unfrozen-{0}-{1}-{2}',
+              inputs.arch,
+              steps.iso-week.outputs.week,
+              hashFiles('oci/*')
             ) }}
 
       - name: Restore Approx Package Repository
@@ -200,7 +234,7 @@ jobs:
         run: echo "size_approx=$(stat -c '%s' approx-cache.tar.zst 2>/dev/null || echo 0)" | tee -a -- "${GITHUB_OUTPUT}"
 
       - name: Build Debian Trixie Base Image
-        if: steps.cache-base-image.outputs.cache-hit != 'true'
+        if: steps.restore-base-image.outputs.cache-hit != 'true'
         shell: bash
         env:
           CLOUD_IMAGES_REF: ${{ steps.cloud-images.outputs.ref }}
@@ -214,6 +248,15 @@ jobs:
           --size 75G
           debian-base.qcow2
 
+      - name: Save Debian Trixie Base Image
+        if: steps.restore-base-image.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            debian-base.qcow2
+            debian-base.qcow2.buildinfo
+          key: ${{ steps.restore-base-image.outputs.cache-primary-key }}
+
       - name: Execute Build Pipeline
         shell: bash
         env:
@@ -223,7 +266,7 @@ jobs:
           KEY_FILE: "/home/debian/.key_mnt/my-private-key.asc"
           GIT_URL: "${{ github.server_url }}/${{ github.repository }}"
           GIT_BRANCH: ${{ github.ref_name }}
-        run: ./.github/scripts/build-guest.sh
+        run: ./.github/scripts/vm-setup.sh
 
       - name: Gather & Stage Artifacts
         shell: bash
@@ -268,3 +311,4 @@ jobs:
           path: release-staging/
           if-no-files-found: error
           retention-days: 1
+

@@ -36,11 +36,13 @@ log() { printf '=== %s ===\n' "$*" >&2; }
 usage() {
   cat <<USAGE
 Usage:
-  ${0##*/} restore-cache  [ARCHIVE_PATH]
-  ${0##*/} save-cache     [ARCHIVE_PATH]
-  ${0##*/} pull-artifacts [STAGING_DIR]
-  ${0##*/} shutdown-vm    [PID_FILE]
-  ${0##*/} exec           <COMMAND> [ARGS...]
+  ${0##*/} restore-cache     [ARCHIVE_PATH]
+  ${0##*/} save-cache        [ARCHIVE_PATH]
+  ${0##*/} restore-oci-image [ARCHIVE_PATH]
+  ${0##*/} save-oci-image    [ARCHIVE_PATH]
+  ${0##*/} pull-artifacts    [STAGING_DIR]
+  ${0##*/} shutdown-vm       [PID_FILE]
+  ${0##*/} exec              <COMMAND> [ARGS...]
 USAGE
 }
 
@@ -79,6 +81,20 @@ _guest_save_cache() {
   sudo test -d "${cache_dir}" || exit 10
   sudo find "${cache_dir}" -mindepth 1 -print -quit | grep -q . || exit 10
   sudo tar --numeric-owner -cf - -C "${cache_dir}" .
+}
+
+_guest_restore_oci_image() {
+  set -euo pipefail
+  buildah pull docker-archive:/dev/stdin >/dev/null
+}
+
+_guest_save_oci_image() {
+  set -euo pipefail
+  local target_arch="${1:-$(uname -m)}"
+  local image_ref="localhost/derivative-maker-oci:${target_arch}"
+
+  [[ -n "$(buildah images -q "${image_ref}" 2>/dev/null)" ]] || exit 10
+  buildah push --quiet "${image_ref}" docker-archive:/dev/stdout
 }
 
 _guest_pull_artifacts() {
@@ -179,6 +195,67 @@ save_cache() {
   trap - EXIT
 }
 
+restore_oci_image() {
+  local archive="$1"
+
+  if [[ ! -f "${archive}" || -L "${archive}" || ! -s "${archive}" ]]; then
+    log "No OCI image archive present to restore"
+    return 0
+  fi
+
+  if ! zstd --test --quiet -- "${archive}"; then
+    printf 'WARNING: Cached OCI image archive failed zstd integrity check; discarding.\n' >&2
+    rm -f -- "${archive}"
+    return 0
+  fi
+
+  log "Restoring verified Buildah OCI image into guest VM"
+  if ! zstd -d --stdout -- "${archive}" | run_on_guest _guest_restore_oci_image; then
+    printf 'WARNING: Failed to import cached OCI image into Buildah; discarding for clean rebuild.\n' >&2
+    rm -f -- "${archive}"
+    return 0
+  fi
+}
+
+save_oci_image() {
+  local archive="$1"
+
+  if [[ -f "${archive}" && ! -L "${archive}" && -s "${archive}" ]]; then
+    log "OCI image archive already exists at ${archive}; skipping export"
+    return 0
+  fi
+
+  local target_arch=""
+  case "${BUILD_ARCH:-}" in
+    amd64) target_arch="x86_64" ;;
+    arm64) target_arch="aarch64" ;;
+    *)     target_arch="${BUILD_ARCH:-}" ;;
+  esac
+
+  local tmp_archive="${archive}.tmp.$$"
+  local rc=0
+
+  mkdir -p -- "$(dirname -- "${archive}")"
+  trap 'rm -f -- "${tmp_archive}"' EXIT
+
+  log "Streaming Buildah OCI image out of guest VM"
+  run_on_guest _guest_save_oci_image ${target_arch:+"${target_arch}"} | \
+    zstd -T0 -3 -f -o "${tmp_archive}" || rc=$?
+
+  if (( rc == 0 )) && [[ -s "${tmp_archive}" ]]; then
+    mv -f -- "${tmp_archive}" "${archive}"
+    ls -lh -- "${archive}"
+  elif (( rc == 10 )); then
+    rm -f -- "${tmp_archive}"
+    log "Guest Buildah OCI image not found; skipping archive creation"
+  else
+    rm -f -- "${tmp_archive}"
+    printf 'WARNING: Failed to export Buildah OCI image (exit %d); continuing.\n' "${rc}" >&2
+  fi
+
+  trap - EXIT
+}
+
 pull_artifacts() {
   local staging_dir="$1"
   local -a find_expr=()
@@ -246,6 +323,16 @@ main() {
         restore_cache "${archive}"
       else
         save_cache "${archive}"
+      fi
+      ;;
+    restore-oci-image|save-oci-image)
+      require_commands ssh zstd
+      local archive
+      archive="$(resolve_path "${2:-${workspace_dir}/oci-image.tar.zst}")"
+      if [[ "${action}" == "restore-oci-image" ]]; then
+        restore_oci_image "${archive}"
+      else
+        save_oci_image "${archive}"
       fi
       ;;
     pull-artifacts)
