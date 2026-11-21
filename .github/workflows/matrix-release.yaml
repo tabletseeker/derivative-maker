@@ -128,7 +128,7 @@ jobs:
       cleanup: ${{ steps.config.outputs.cleanup }}
     steps:
       - name: Checkout config script
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           sparse-checkout: |
@@ -165,7 +165,7 @@ jobs:
       job_count: ${{ steps.generate.outputs.job_count }}
     steps:
       - name: Checkout matrix configuration
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           sparse-checkout: |
@@ -189,7 +189,7 @@ jobs:
       tag: ${{ steps.resolve.outputs.tag }}
     steps:
       - name: Checkout tags
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -261,14 +261,14 @@ jobs:
       DEBEMAIL: ${{ needs.resolve-config.outputs.debemail }}
     steps:
       - name: Checkout Publisher Scripts
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           fetch-tags: true
 
       - name: Download Matrix Outputs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: derivative-${{ github.run_id }}-*
           path: release-artifacts

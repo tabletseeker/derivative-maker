@@ -141,7 +141,7 @@ jobs:
 
     steps:
       - name: Checkout Build Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -152,110 +152,57 @@ jobs:
         shell: bash
         run: ./.github/scripts/setup-host.sh
 
-      - name: Resolve Debian Cloud Image State
-        id: cloud-images
+      - name: Prepare Cache Metadata
+        id: cache-meta
         shell: bash
         run: |
-          ref="$(bash ./.github/scripts/build-debian-vm-base.sh --resolve)"
-          echo "Resolved Debian Cloud Team revision: ${ref}"
-          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+          week="$(date -u +%G-W%V)"
+          prefix="approx-trixie-${week}-${{ inputs.arch }}-"
+          {
+            echo "week=${week}"
+            echo "approx_prefix=${prefix}"
+            echo "approx_key=${prefix}${{ github.run_id }}-${{ inputs.artifact_id }}"
+          } | tee -a -- "${GITHUB_OUTPUT}"
 
-      - name: Get Current ISO Week
-        id: iso-week
-        shell: bash
-        run: echo "week=$(date -u +%G-W%V)" | tee -a -- "${GITHUB_OUTPUT}"
+      - name: Prepare Debian Trixie Base Image
+        uses: ./.github/actions/prepare-debian-base
 
-      - name: Compute Weekly Approx Cache Key
-        id: approx-key
-        shell: bash
-        run: |
-          prefix="approx-trixie-${{ steps.iso-week.outputs.week }}-${{ inputs.arch }}-"
-          echo "prefix=${prefix}" | tee -a -- "${GITHUB_OUTPUT}"
-          echo "key=${prefix}${{ github.run_id }}-${{ inputs.artifact_id }}" | tee -a -- "${GITHUB_OUTPUT}"
-
-      - name: Restore Debian Trixie Base Image
-        id: restore-base-image
-        uses: actions/cache/restore@v5
-        with:
-          path: |
-            debian-base.qcow2
-            debian-base.qcow2.buildinfo
-          key: >-
-            ${{ format(
-              'debian-trixie-base-{0}-{1}',
-              steps.cloud-images.outputs.ref,
-              hashFiles(
-                '.github/scripts/build-debian-vm-base.sh',
-                '.github/scripts/setup-host.sh',
-                '.github/scripts/verify-debian-vm-base.sh'
-              )
-            ) }}
-
-      - name: Cache Frozen OCI Image
-        if: ${{ !inputs.allow_unfrozen }}
+      - name: Cache Derivative Maker OCI Image
         uses: actions/cache@v5
         with:
           path: oci-image.tar.zst
           key: >-
-            ${{ format(
-              'oci-trixie-frozen-{0}-{1}',
-              inputs.arch,
-              hashFiles(
-                'oci/*',
-                'build_sources/frozen-snapshot-timestamp',
-                'build_sources/debian_stable_frozen_direct_clearnet.sources.in'
-              )
-            ) }}
-
-      - name: Cache Unfrozen OCI Image
-        if: inputs.allow_unfrozen
-        uses: actions/cache@v5
-        with:
-          path: oci-image.tar.zst
-          key: >-
-            ${{ format(
-              'oci-trixie-unfrozen-{0}-{1}-{2}',
-              inputs.arch,
-              steps.iso-week.outputs.week,
-              hashFiles('oci/*')
-            ) }}
+            ${{
+              inputs.allow_unfrozen
+                && format(
+                  'oci-trixie-unfrozen-{0}-{1}-{2}',
+                  inputs.arch,
+                  steps.cache-meta.outputs.week,
+                  hashFiles('oci/*')
+                )
+                || format(
+                  'oci-trixie-frozen-{0}-{1}',
+                  inputs.arch,
+                  hashFiles(
+                    'oci/*',
+                    'build_sources/frozen-snapshot-timestamp',
+                    'build_sources/debian_stable_frozen_direct_clearnet.sources.in'
+                  )
+                )
+            }}
 
       - name: Restore Approx Package Repository
         uses: actions/cache/restore@v5
         with:
           path: approx-cache.tar.zst
-          key: ${{ steps.approx-key.outputs.key }}
+          key: ${{ steps.cache-meta.outputs.approx_key }}
           restore-keys: |
-            ${{ steps.approx-key.outputs.prefix }}
+            ${{ steps.cache-meta.outputs.approx_prefix }}
 
       - name: Snapshot Restored Approx Size
         id: approx-before
         shell: bash
         run: echo "size_approx=$(stat -c '%s' approx-cache.tar.zst 2>/dev/null || echo 0)" | tee -a -- "${GITHUB_OUTPUT}"
-
-      - name: Build Debian Trixie Base Image
-        if: steps.restore-base-image.outputs.cache-hit != 'true'
-        shell: bash
-        env:
-          CLOUD_IMAGES_REF: ${{ steps.cloud-images.outputs.ref }}
-        run: bash ./.github/scripts/build-debian-vm-base.sh debian-base.qcow2 75G
-
-      - name: Verify Debian Trixie Base Image
-        shell: bash
-        run: >-
-          bash ./.github/scripts/verify-debian-vm-base.sh
-          --ref "${{ steps.cloud-images.outputs.ref }}"
-          --size 75G
-          debian-base.qcow2
-
-      - name: Save Debian Trixie Base Image
-        if: steps.restore-base-image.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: |
-            debian-base.qcow2
-            debian-base.qcow2.buildinfo
-          key: ${{ steps.restore-base-image.outputs.cache-primary-key }}
 
       - name: Execute Build Pipeline
         shell: bash
@@ -274,38 +221,17 @@ jobs:
           GIT_URL: "${{ github.server_url }}/${{ github.repository }}"
         run: ./.github/scripts/gather-artifacts.sh
 
-      - name: Evaluate Approx Cache Growth
-        id: approx-after
+      - name: Update Approx Package Repository Cache
         if: success() && inputs.update_approx_cache
-        shell: bash
-        run: |
-          before="${{ steps.approx-before.outputs.size_approx }}"
-          after="$(stat -c '%s' approx-cache.tar.zst 2>/dev/null || echo 0)"
-          growth=$(( after - before ))
-          echo "should_save=$(( after > 0 && growth >= 20971520 ? 1 : 0 ))" | tee -a -- "${GITHUB_OUTPUT}"
-
-      - name: Save Updated Approx Package Repository
-        id: save-approx
-        if: steps.approx-after.outputs.should_save == '1'
-        uses: actions/cache/save@v5
+        uses: ./.github/actions/update-approx-cache
         with:
-          path: approx-cache.tar.zst
-          key: ${{ steps.approx-key.outputs.key }}
-
-      - name: Prune Superseded Approx Caches
-        if: steps.save-approx.outcome == 'success'
-        continue-on-error: true
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPROX_PREFIX: ${{ steps.approx-key.outputs.prefix }}
-        run: |
-          gh cache list --repo "${{ github.repository }}" --limit 100 --json id,key,createdAt \
-            --jq '[.[] | select(.key | startswith(env.APPROX_PREFIX))] | sort_by(.createdAt) | .[:-1] | .[].id' | \
-            xargs -r -n 1 gh cache delete --repo "${{ github.repository }}"
+          before_size: ${{ steps.approx-before.outputs.size_approx }}
+          cache_key: ${{ steps.cache-meta.outputs.approx_key }}
+          cache_prefix: ${{ steps.cache-meta.outputs.approx_prefix }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Staged Build Outputs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: derivative-${{ github.run_id }}-${{ inputs.artifact_id }}
           path: release-staging/

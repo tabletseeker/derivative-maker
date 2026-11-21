@@ -45,6 +45,21 @@ PRIMARY_SUFFIXES = (
 ARCHITECTURES = ("Intel_AMD64", "ARM64", "amd64", "arm64")
 ARCHITECTURE_PATTERN = "|".join(re.escape(arch) for arch in ARCHITECTURES)
 
+SKIP_SUPPORT_FILES = {
+    "mullvad-keyring.asc",
+    "oracle_vbox_2016.asc",
+    "tbb-team.asc",
+    "torprojectarchive.asc",
+}
+
+
+def should_skip_file(name):
+    """Return True for internal build-support keyrings excluded from release."""
+    lowered = name.lower()
+    if lowered in SKIP_SUPPORT_FILES:
+        return True
+    return bool(re.fullmatch(r"[0-9a-f]{40}\.asc", lowered))
+
 
 def unsplit(name):
     """Return the original asset name for a GNU split part."""
@@ -159,8 +174,11 @@ def artifact_type(name):
         return "🧊 VBox"
     return "📦 Download"
 
-
-files = sorted(path for path in staging.iterdir() if path.is_file())
+files = sorted(
+    path
+    for path in staging.iterdir()
+    if path.is_file() and not should_skip_file(path.name)
+)
 
 labels = sorted(
     {

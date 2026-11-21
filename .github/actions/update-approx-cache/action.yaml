@@ -1,0 +1,61 @@
+## Copyright (C) 2026-2027 tabletseeker <tabletseeker-git@protonmail.com>
+## See the LICENSE for conditions of reproduction or redistribution.
+## All rights reserved by the repository maintainer
+
+name: Update Approx Package Repository Cache
+description: Evaluate approx archive growth, save updated cache, and prune superseded entries.
+
+inputs:
+  archive_path:
+    description: Path to compressed approx archive
+    required: false
+    default: approx-cache.tar.zst
+  before_size:
+    description: Restored archive size in bytes before build
+    required: true
+  cache_key:
+    description: Primary cache key to save under
+    required: true
+  cache_prefix:
+    description: Key prefix for pruning superseded weekly caches
+    required: true
+  github_token:
+    description: GitHub token with actions:write permission for cache pruning
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Evaluate Approx Cache Growth
+      id: approx-after
+      shell: bash
+      env:
+        ARCHIVE_PATH: ${{ inputs.archive_path }}
+        BEFORE_SIZE: ${{ inputs.before_size }}
+      run: |
+        after="$(stat -c '%s' "${ARCHIVE_PATH}" 2>/dev/null || echo 0)"
+        growth=$(( after - BEFORE_SIZE ))
+        printf 'Approx cache: before=%d B, after=%d B, growth=%+d B (%+.2f MiB)\n' \
+          "${BEFORE_SIZE}" "${after}" "${growth}" "$(awk "BEGIN { print ${growth} / 1048576 }")"
+        echo "should_save=$(( after > 0 && growth >= 20971520 ? 1 : 0 ))" | tee -a -- "${GITHUB_OUTPUT}"
+
+    - name: Save Updated Approx Package Repository
+      id: save-approx
+      if: steps.approx-after.outputs.should_save == '1'
+      uses: actions/cache/save@v5
+      with:
+        path: ${{ inputs.archive_path }}
+        key: ${{ inputs.cache_key }}
+
+    - name: Prune Superseded Approx Caches
+      if: steps.save-approx.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        APPROX_PREFIX: ${{ inputs.cache_prefix }}
+      run: |
+        gh cache list --repo "${{ github.repository }}" --limit 100 --json id,key,createdAt \
+          --jq '[.[] | select(.key | startswith(env.APPROX_PREFIX))] | sort_by(.createdAt) | .[:-1] | .[].id' | \
+          xargs -r -n 1 gh cache delete --repo "${{ github.repository }}"
+
