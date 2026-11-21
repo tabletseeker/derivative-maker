@@ -46,6 +46,8 @@ ARCHITECTURES = ("Intel_AMD64", "ARM64", "amd64", "arm64")
 ARCHITECTURE_PATTERN = "|".join(re.escape(arch) for arch in ARCHITECTURES)
 
 SKIP_SUPPORT_FILES = {
+    "derivative.asc",
+    "kicksecure-developer-patrick.asc",
     "mullvad-keyring.asc",
     "oracle_vbox_2016.asc",
     "tbb-team.asc",
@@ -171,7 +173,7 @@ def artifact_type(name):
     if lowered_name.endswith(".iso"):
         return "💿 ISO"
     if lowered_name.endswith(".ova"):
-        return "🧊 VBox"
+        return "🧊 VBX"
     return "📦 Download"
 
 files = sorted(
@@ -286,8 +288,7 @@ important = {
     or (
         path.name.lower().endswith(".asc")
         and (
-            path.name.lower() == "derivative.asc"
-            or "-developer-" in path.name.lower()
+            path.name.lower() == "whonix-developer-patrick.asc"
             or path.name.lower().startswith("derivative-maker-openpgp")
         )
     )

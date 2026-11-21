@@ -253,6 +253,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
+      GIT_URL: "${{ github.server_url }}/${{ github.repository }}"
       BUILD_MODE: ${{ needs.resolve-version.outputs.mode }}
       BUILD_VERSION: ${{ needs.resolve-version.outputs.version }}
       RELEASE_TAG: ${{ needs.resolve-version.outputs.tag }}

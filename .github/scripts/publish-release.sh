@@ -23,9 +23,13 @@ if [[ "${BUILD_MODE}" != "nightly" && "${BUILD_MODE}" != "release" ]]; then
   exit 1
 fi
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE="${GITHUB_WORKSPACE:-$(pwd)}"
 ARTIFACT_ROOT="${WORKSPACE}/release-artifacts"
 MERGED_DIR="${WORKSPACE}/release-merged"
+NOTES_DIR="${WORKSPACE}/release-notes-parts"
+RENDERER="${SCRIPT_DIR}/render-notes.py"
+GIT_URL="${GIT_URL:-${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-tabletseeker/derivative-maker}}"
 RUN_ID="${GITHUB_RUN_ID:-local}"
 NOTES_FILE="${RUNNER_TEMP:-/tmp}/release-notes-${RUN_ID}.md"
 GNUPGHOME="$(mktemp -d)"
@@ -44,6 +48,8 @@ should_skip_matrix_file() {
   local filename="${1##*/}"
 
   case "${filename}" in
+    derivative.asc|\
+    kicksecure-developer-patrick.asc|\
     mullvad-keyring.asc|\
     oracle_vbox_2016.asc|\
     tbb-team.asc|\
@@ -92,8 +98,8 @@ merge_matrix_artifacts() {
     exit 1
   fi
 
-  rm -rf -- "${MERGED_DIR}"
-  mkdir -p -- "${MERGED_DIR}"
+  rm -rf -- "${MERGED_DIR}" "${NOTES_DIR}"
+  mkdir -p -- "${MERGED_DIR}" "${NOTES_DIR}"
 
   echo "=== Merge matrix artifacts ==="
   mapfile -d '' -t INPUT_FILES < <(
@@ -113,7 +119,11 @@ merge_matrix_artifacts() {
       continue
     fi
 
-    destination="${MERGED_DIR}/${filename}"
+    if [[ "${filename}" == *-release-notes.md ]]; then
+      destination="${NOTES_DIR}/${filename}"
+    else
+      destination="${MERGED_DIR}/${filename}"
+    fi
 
     if [[ -e "${destination}" ]]; then
       if ! cmp -s -- "${source}" "${destination}"; then
@@ -129,8 +139,13 @@ merge_matrix_artifacts() {
 }
 
 compose_release_notes() {
+  if [[ ! -f "${RENDERER}" ]]; then
+    echo "ERROR: Release display renderer not found: ${RENDERER}" >&2
+    exit 1
+  fi
+
   mapfile -d '' -t NOTE_FILES < <(
-    find "${MERGED_DIR}" -maxdepth 1 -type f \
+    find "${NOTES_DIR}" -maxdepth 1 -type f \
       -name '*-release-notes.md' -print0 | sort -z
   )
 
@@ -139,16 +154,25 @@ compose_release_notes() {
     exit 1
   fi
 
+  printf '### 🛠️ Build Manifest\n\n' > "${NOTES_FILE}"
+
   for note_file in "${NOTE_FILES[@]}"; do
-    printf '\n---\n\n' >> "${NOTES_FILE}"
     cat -- "${note_file}" >> "${NOTES_FILE}"
+    printf '\n' >> "${NOTES_FILE}"
   done
+
+  printf -- '---\n\n' >> "${NOTES_FILE}"
+  echo "=== Render unified flavor menu and SHA-512 summary ==="
+  python3 "${RENDERER}" \
+    "${MERGED_DIR}" \
+    "${GIT_URL}" \
+    "${RELEASE_TAG}" \
+    >> "${NOTES_FILE}"
 }
 
 collect_staged_assets() {
   mapfile -d '' -t STAGED_ASSETS < <(
     find "${MERGED_DIR}" -maxdepth 1 -type f \
-      ! -name '*-release-notes.md' \
       -print0 | sort -z
   )
 
