@@ -15,17 +15,14 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 STAGING_DIR="${WORKSPACE_DIR}/release-staging"
 BUILD_LOG="${WORKSPACE_DIR}/build.log"
-RENDERER="${SCRIPT_DIR}/render-notes.py"
 RELEASE_NOTES_FILE="${WORKSPACE_DIR}/release_notes.md"
 RUNNER_USER="$(id -un)"
 RUNNER_GROUP="$(id -gn)"
-GIT_URL="${GIT_URL:-${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-tabletseeker/derivative-maker}}"
 BUILD_LABEL="${RELEASE_FLAVOR:-${flavors_list:-build}}"
 BUILD_ID="${BUILD_ARTIFACT_ID:-${BUILD_LABEL,,}-${GITHUB_RUN_ID:-local}}"
 BUILD_LOG_FILE="build-${BUILD_ID}.log"
 BUILD_NOTES_FILE="${BUILD_ID}-release-notes.md"
 VM_HELPER="${SCRIPT_DIR}/vm-sync-helper.sh"
-PID_FILE="${WORKSPACE_DIR}/qemu.pid"
 
 if [[ -z "${RELEASE_TAG:-}" ]]; then
   echo "ERROR: RELEASE_TAG must be provided by the workflow." >&2
@@ -65,11 +62,6 @@ find "${STAGING_DIR}" -maxdepth 1 -type f -print0 |
     fi
   done
 
-if [[ ! -f "${RENDERER}" ]]; then
-  echo "ERROR: Release display renderer not found: ${RENDERER}" >&2
-  exit 1
-fi
-
 case "${BUILD_ARCH:-unknown}" in
   amd64) ARCH_NAME="Intel_AMD64" ;;
   arm64) ARCH_NAME="ARM64" ;;
@@ -98,8 +90,8 @@ META_ROW=""
 PKG_ROW=""
 APT_ROW=""
 
-if [[ -n "${flavor_meta_packages:-}" ]]; then
-  META_ROW="| **Custom Meta Packages Added** | \`${flavor_meta_packages}\` |"
+if [[ -n "${flavor_meta_packages_to_install:-}" ]]; then
+  META_ROW="| **Custom Meta Packages Added** | \`${flavor_meta_packages_to_install}\` |"
 fi
 if [[ -n "${install_package_list:-}" ]]; then
   PKG_ROW="| **Appended Package List** | \`${install_package_list}\` |"
@@ -111,7 +103,9 @@ fi
 cat <<EOF > "${RELEASE_NOTES_FILE}"
 <!-- matrix-build:${BUILD_ID} -->
 
-## ${RELEASE_FLAVOR:-${flavors_list:-unknown}} ${CHOSEN_VERSION:-unknown} (${ARCH_NAME} ${BUILD_TARGET_UPPER} ${BUILD_TYPE_UPPER})
+<details>
+<summary>${RELEASE_FLAVOR:-${flavors_list:-unknown}} ${CHOSEN_VERSION:-unknown} (${ARCH_NAME} ${BUILD_TARGET_UPPER} ${BUILD_TYPE_UPPER})</summary>
+<br>
 
 | Parameter | Build Option |
 | :--- | :--- |
@@ -131,12 +125,7 @@ EOF
 [[ -z "${PKG_ROW}" ]] || printf '%s\n' "${PKG_ROW}" >> "${RELEASE_NOTES_FILE}"
 [[ -z "${APT_ROW}" ]] || printf '%s\n' "${APT_ROW}" >> "${RELEASE_NOTES_FILE}"
 
-echo "=== Render flavor menu and SHA-512 summary ==="
-python3 "${RENDERER}" \
-  "${STAGING_DIR}" \
-  "${GIT_URL}" \
-  "${RELEASE_TAG}" \
-  >> "${RELEASE_NOTES_FILE}"
+printf '\n</details>\n' >> "${RELEASE_NOTES_FILE}"
 
 cp -- "${RELEASE_NOTES_FILE}" "${STAGING_DIR}/${BUILD_NOTES_FILE}"
 
