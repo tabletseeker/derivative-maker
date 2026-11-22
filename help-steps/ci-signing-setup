@@ -92,6 +92,15 @@ export rsync_cmd="true"
 export signing_key_email="${DEBEMAIL:-}"
 EOF
 
+if [[ "${BUILD_MODE:-}" == "cache" ]]; then
+  cat << 'EOF' >> "${DM_CONFIG_DIR}/30_ci-override.conf"
+export dist_build_max_jobs="$(nproc)"
+export dist_build_reuse_cowbuilder_base="true"
+export XZ_OPT="-T0 -1"
+export SKIP_SCRIPTS="${SKIP_SCRIPTS:-} 1600_export-libvirt-xml 1700_create-vm-text 4310_convert-raw-to-iso 4350_reimage-raw-reproducible 4400_convert-raw-to-qcow2 4600_create-vbox-vm 4600_export-utm-packages 5100_create-report 5200_prepare-release dm-prepare-release dm-upload-images "
+EOF
+fi
+
 # Configure repo-local git with a valid identity.
 git -C "${REPO_ROOT}" config user.name "${DEBFULLNAME}"
 git -C "${REPO_ROOT}" config user.email "${DEBEMAIL}"

@@ -34,8 +34,16 @@ if [[ "${EVENT_NAME}" == "schedule" ]]; then
   case "${EVENT_SCHEDULE:-}" in
     "0 6 * * *")
       build_mode="nightly"
-      matrix_assets="all-amd64-kvm"
+      matrix_assets="cli-vm-amd64 kicksecure-lxqt-amd64-vm whonix-lxqt-amd64-vm"
       release_name="Nightly Build:"
+      dist_build_redistributable="false"
+      freshness="current"
+      allow_unfrozen="true"
+      ;;
+    "5 0 * * 1")
+      build_mode="cache"
+      matrix_assets="cache-amd64"
+      release_name="Cache Warmup AMD64:"
       dist_build_redistributable="false"
       freshness="current"
       allow_unfrozen="true"

@@ -13,13 +13,13 @@ shopt -s shift_verbose
 
 VM_WORKDIR="/home/debian/build-workspace"
 
-echo "[+] Guest Subsystem: Initializing key space..."
+echo "== Guest Subsystem: Initializing key space =="
 mkdir -p "${KEY_DIR}"
 
 printf '%s' "${CI_PRIVATE_KEY}" > "${KEY_FILE}"
 chmod 400 "${KEY_FILE}"
 
-echo "[+] Cloning repository into guest workspace..."
+echo "== Cloning repository into guest workspace =="
 mkdir -p "${VM_WORKDIR}"
 
 git clone \
@@ -29,10 +29,11 @@ git clone \
   "${GIT_URL}" \
   "${VM_WORKDIR}"
 
+git -C "${VM_WORKDIR}" fetch --tags --force origin "${GITHUB_SHA}"
 git -C "${VM_WORKDIR}" checkout --detach "${GITHUB_SHA}"
 git -C "${VM_WORKDIR}" submodule update --init --recursive
 
-echo "[+] Launching release pipeline..."
+echo "== Launching release pipeline =="
 cd "${VM_WORKDIR}"
 
 ./oci/derivative-maker-oci-run -- bash -c "

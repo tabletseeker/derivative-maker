@@ -8,7 +8,7 @@ on:
   workflow_call:
     inputs:
       build_mode:
-        description: "Release or Nightly"
+        description: "Release, Nightly, or Cache"
         required: true
         type: string
       release_flavor:
@@ -215,11 +215,23 @@ jobs:
           GIT_BRANCH: ${{ github.ref_name }}
         run: ./.github/scripts/vm-setup.sh
 
+      - name: Extract VM Caches
+        shell: bash
+        run: |
+          ./.github/scripts/vm-sync-helper.sh save-cache "${GITHUB_WORKSPACE}/approx-cache.tar.zst"
+          ./.github/scripts/vm-sync-helper.sh save-oci-image "${GITHUB_WORKSPACE}/oci-image.tar.zst"
+
       - name: Gather & Stage Artifacts
+        if: inputs.build_mode != 'cache'
         shell: bash
         env:
           GIT_URL: "${{ github.server_url }}/${{ github.repository }}"
         run: ./.github/scripts/gather-artifacts.sh
+
+      - name: Shutdown VM
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: ./.github/scripts/vm-sync-helper.sh shutdown-vm "${GITHUB_WORKSPACE}/qemu.pid"
 
       - name: Update Approx Package Repository Cache
         if: success() && inputs.update_approx_cache
@@ -231,10 +243,12 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Staged Build Outputs
+        if: inputs.build_mode != 'cache'
         uses: actions/upload-artifact@v7
         with:
           name: derivative-${{ github.run_id }}-${{ inputs.artifact_id }}
           path: release-staging/
           if-no-files-found: error
           retention-days: 1
+
 

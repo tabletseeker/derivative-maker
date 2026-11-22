@@ -15,6 +15,7 @@ on:
         options:
           - "release"
           - "nightly"
+          - "cache"
 
       matrix_assets:
         description: "Matrix asset selection"
@@ -93,6 +94,7 @@ on:
 
   schedule:
     - cron: "0 6 * * *"
+    - cron: "5 0 * * 1"
 
 permissions:
   contents: read
@@ -103,6 +105,7 @@ concurrency:
     derivative-maker-${{
       inputs.version_prefix || vars.DEFAULT_VERSION_PREFIX
     }}-${{
+      (github.event_name == 'schedule' && github.event.schedule == '5 0 * * 1') && 'cache' ||
       (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') && 'nightly' ||
       (inputs.build_mode || 'release')
     }}
@@ -237,11 +240,16 @@ jobs:
       debfullname: ${{ needs.resolve-config.outputs.debfullname }}
       debemail: ${{ needs.resolve-config.outputs.debemail }}
       cleanup: ${{ needs.resolve-config.outputs.cleanup == 'true' }}
-      update_approx_cache: ${{ needs.select-matrix-assets.outputs.job_count == '1' }}
+      update_approx_cache: >-
+        ${{
+          needs.select-matrix-assets.outputs.job_count == '1' ||
+          (needs.resolve-config.outputs.build_mode == 'cache' && startsWith(matrix.id, 'cache-'))
+        }}
     secrets: inherit
 
   publish:
     name: Publish Merged Matrix Release
+    if: needs.resolve-config.outputs.build_mode != 'cache'
     needs:
       - resolve-config
       - resolve-version
