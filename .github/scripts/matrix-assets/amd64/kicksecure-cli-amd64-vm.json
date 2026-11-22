@@ -3,7 +3,7 @@
   "release_flavor": "Kicksecure-CLI",
   "flavors_list": "kicksecure-cli",
   "arch": "amd64",
-  "target": "virtualbox qcow2",
+  "target": "qcow2",
   "type": "vm",
   "container_engine": "podman",
   "flavor_meta_packages_to_install": "",

@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+## Copyright (C) 2026-2027 tabletseeker <tabletseeker-git@protonmail.com>
+## See the LICENSE for conditions of reproduction or redistribution.
+## All rights reserved by the repository maintainer
+
 import hashlib
 import html
 import re
@@ -19,7 +24,7 @@ release_url = (
 
 CATEGORIES = (
     ("primary", "🏁 Primary Downloads", "Production Image"),
-    ("verification", "🔐 Verification", "OpenPGP & Signature"),
+    ("verification", "🔐 OpenPGP & Signature", "Cryptographic Assets"),
     ("checksums", "📋 Checksums", "SHA-512 Checksums"),
     ("torrents", "🧲 Torrents", "Torrent File"),
     ("buildinfo", "ℹ️ Build Information", "Build Metadata"),
@@ -38,6 +43,24 @@ PRIMARY_SUFFIXES = (
 )
 
 ARCHITECTURES = ("Intel_AMD64", "ARM64", "amd64", "arm64")
+ARCHITECTURE_PATTERN = "|".join(re.escape(arch) for arch in ARCHITECTURES)
+
+SKIP_SUPPORT_FILES = {
+    "derivative.asc",
+    "kicksecure-developer-patrick.asc",
+    "mullvad-keyring.asc",
+    "oracle_vbox_2016.asc",
+    "tbb-team.asc",
+    "torprojectarchive.asc",
+}
+
+
+def should_skip_file(name):
+    """Return True for internal build-support keyrings excluded from release."""
+    lowered = name.lower()
+    if lowered in SKIP_SUPPORT_FILES:
+        return True
+    return bool(re.fullmatch(r"[0-9a-f]{40}\.asc", lowered))
 
 
 def unsplit(name):
@@ -57,7 +80,7 @@ def is_primary(name):
 
 
 def product_label(name):
-    """Infer the product label from the filename of a primary asset."""
+    """Infer a product label from a primary asset filename."""
     if not is_primary(name):
         return None
 
@@ -69,20 +92,34 @@ def product_label(name):
     )
     stem = original_name[:-len(suffix)]
 
-    architecture_pattern = "|".join(
-        re.escape(architecture) for architecture in ARCHITECTURES
-    )
     match = re.match(
         rf"^(?P<label>.+)-"
-        rf"(?P<version>[0-9][A-Za-z0-9.+~_-]*)\."
-        rf"(?P<architecture>{architecture_pattern})$",
+        rf"(?P<version>[A-Za-z0-9][A-Za-z0-9.+~_-]*)\."
+        rf"(?P<architecture>{ARCHITECTURE_PATTERN})$",
         stem,
         flags=re.IGNORECASE,
     )
-    if match:
-        return match.group("label")
+    return match.group("label") if match else None
 
-    return None
+
+def product_version(name, label):
+    """Extract the numeric/version-like component for display."""
+    original_name = unsplit(name)
+    suffix = next(
+        suffix
+        for suffix in PRIMARY_SUFFIXES
+        if original_name.lower().endswith(suffix.lower())
+    )
+    stem = original_name[:-len(suffix)]
+
+    match = re.match(
+        rf"^{re.escape(label)}-"
+        rf"(?P<version>[A-Za-z0-9][A-Za-z0-9.+~_-]*)\."
+        rf"(?P<architecture>{ARCHITECTURE_PATTERN})$",
+        stem,
+        flags=re.IGNORECASE,
+    )
+    return match.group("version") if match else None
 
 
 def category(name):
@@ -136,11 +173,14 @@ def artifact_type(name):
     if lowered_name.endswith(".iso"):
         return "💿 ISO"
     if lowered_name.endswith(".ova"):
-        return "🧊 VBox"
+        return "🧊 VBX"
     return "📦 Download"
 
-
-files = sorted(path for path in staging.iterdir() if path.is_file())
+files = sorted(
+    path
+    for path in staging.iterdir()
+    if path.is_file() and not should_skip_file(path.name)
+)
 
 labels = sorted(
     {
@@ -153,7 +193,6 @@ labels = sorted(
 
 files_by_label = {label: [] for label in labels}
 support_files = []
-
 labels_by_length = sorted(labels, key=len, reverse=True)
 
 for path in files:
@@ -177,7 +216,17 @@ print("### 📦 Downloads\n")
 
 for label in labels:
     label_files = sorted(files_by_label[label])
-    escaped_label = html.escape(label, quote=True)
+    version = next(
+        (
+            version
+            for path in label_files
+            if is_primary(path.name)
+            and (version := product_version(path.name, label)) is not None
+        ),
+        None,
+    )
+    display_label = f"{label}-{version}" if version else label
+    escaped_label = html.escape(display_label, quote=True)
 
     print(
         f"<details>\n"
@@ -219,7 +268,7 @@ print("<details>\n<summary>📄 Support Files</summary>\n")
 
 if support_files:
     print("| File | Size |")
-    print("|---|---:|---|")
+    print("|---|---:|")
     for path in sorted(support_files):
         print(f"| {link(path)} | {size(path)} |")
     print()
@@ -239,16 +288,19 @@ important = {
     or (
         path.name.lower().endswith(".asc")
         and (
-            path.name.lower() == "derivative.asc"
-            or "-developer-" in path.name.lower()
+            path.name.lower() == "whonix-developer-patrick.asc"
             or path.name.lower().startswith("derivative-maker-openpgp")
         )
     )
 }
 
 print("### 🔢 Quick SHA-512 Checksums\n")
-print("Verify all images and source archives using the provided hashes, signatures and keys.\n")
+print(
+    "Verify all images and source archives using the provided hashes, "
+    "signatures and keys.\n"
+)
 print("```text")
 for name in sorted(important):
     print(f"{digest(staging / name, 'sha512')}  {name}")
 print("```")
+

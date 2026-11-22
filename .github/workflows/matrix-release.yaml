@@ -1,34 +1,41 @@
+## Copyright (C) 2026-2027 tabletseeker <tabletseeker-git@protonmail.com>
+## See the LICENSE for conditions of reproduction or redistribution.
+## All rights reserved by the repository maintainer
+
 name: Derivative-Maker Matrix
 
 on:
   workflow_dispatch:
     inputs:
+      build_mode:
+        description: "Build mode"
+        required: false
+        default: "release"
+        type: choice
+        options:
+          - "release"
+          - "nightly"
+
       matrix_assets:
-        description: "Matrix asset ID"
-        required: true
+        description: "Matrix asset selection"
+        required: false
         default: "all-amd64-kvm"
         type: string
 
-      version:
-        description: "Shared release version"
+      version_prefix:
+        description: "Version family"
         required: false
-        default: "18.2.4.8"
-        type: string
-
-      release_suffix:
-        description: "Tag suffix"
-        required: false
-        default: "nightly"
+        default: ""
         type: string
 
       release_name:
-        description: "Production Label"
+        description: "Production release prefix"
         required: false
         default: "Production Release:"
         type: string
 
       freshness:
-        description: "APT Sources Freshness"
+        description: "APT sources freshness"
         required: false
         default: "frozen"
         type: choice
@@ -37,66 +44,128 @@ on:
           - "current"
 
       allow_untagged:
-        description: "Allow Untagged"
+        description: "Allow untagged sources"
         required: false
         default: false
         type: boolean
 
       allow_uncommitted:
-        description: "Allow Uncommitted"
+        description: "Allow uncommitted changes"
         required: false
         default: false
         type: boolean
 
       allow_unfrozen:
-        description: "Allow Unfrozen Sources"
+        description: "Allow unfrozen sources"
         required: false
         default: false
         type: boolean
 
       remote_derivative_packages:
-        description: "Remote Packages"
+        description: "Use remote derivative packages"
         required: false
         default: false
         type: boolean
 
       dist_build_redistributable:
-        description: "Production Release"
+        description: "Production release"
         required: false
         default: true
         type: boolean
 
+      cleanup:
+        description: "Wipe host pre-run"
+        required: false
+        default: false
+        type: boolean
+
       debfullname:
-        description: "Key Owner Identity"
+        description: "Signing-key owner name"
         required: false
         default: "tabletseeker-ci"
         type: string
 
       debemail:
-        description: "Key Owner E-mail"
+        description: "Signing-key owner email"
         required: false
         default: "tabletseeker-ci@github.com"
         type: string
 
-permissions:
-  contents: write
+  schedule:
+    - cron: "0 6 * * *"
 
-# Serializes runs for the same version.
+permissions:
+  contents: read
+  actions: write
+
 concurrency:
-  group: derivative-maker-release-${{ inputs.version }}-${{ inputs.release_suffix }}
+  group: >-
+    derivative-maker-${{
+      inputs.version_prefix || vars.DEFAULT_VERSION_PREFIX
+    }}-${{
+      (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') && 'nightly' ||
+      (inputs.build_mode || 'release')
+    }}
   cancel-in-progress: false
 
 jobs:
+  resolve-config:
+    name: Resolve workflow config
+    runs-on: ubuntu-latest
+    outputs:
+      build_mode: ${{ steps.config.outputs.build_mode }}
+      matrix_assets: ${{ steps.config.outputs.matrix_assets }}
+      version_prefix: ${{ steps.config.outputs.version_prefix }}
+      release_name: ${{ steps.config.outputs.release_name }}
+      freshness: ${{ steps.config.outputs.freshness }}
+      dist_build_redistributable: ${{ steps.config.outputs.dist_build_redistributable }}
+      allow_untagged: ${{ steps.config.outputs.allow_untagged }}
+      allow_uncommitted: ${{ steps.config.outputs.allow_uncommitted }}
+      allow_unfrozen: ${{ steps.config.outputs.allow_unfrozen }}
+      remote_derivative_packages: ${{ steps.config.outputs.remote_derivative_packages }}
+      debfullname: ${{ steps.config.outputs.debfullname }}
+      debemail: ${{ steps.config.outputs.debemail }}
+      cleanup: ${{ steps.config.outputs.cleanup }}
+    steps:
+      - name: Checkout config script
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: |
+            .github/scripts/resolve-config.sh
+
+      - name: Resolve inputs & cron presets
+        id: config
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
+          DEFAULT_VERSION_PREFIX: ${{ vars.DEFAULT_VERSION_PREFIX }}
+          INPUT_BUILD_MODE: ${{ inputs.build_mode }}
+          INPUT_MATRIX_ASSETS: ${{ inputs.matrix_assets }}
+          INPUT_VERSION_PREFIX: ${{ inputs.version_prefix }}
+          INPUT_RELEASE_NAME: ${{ inputs.release_name }}
+          INPUT_FRESHNESS: ${{ inputs.freshness }}
+          INPUT_DIST_BUILD_REDISTRIBUTABLE: ${{ inputs.dist_build_redistributable }}
+          INPUT_ALLOW_UNTAGGED: ${{ inputs.allow_untagged }}
+          INPUT_ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
+          INPUT_ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
+          INPUT_REMOTE_DERIVATIVE_PACKAGES: ${{ inputs.remote_derivative_packages }}
+          INPUT_DEBFULLNAME: ${{ inputs.debfullname }}
+          INPUT_DEBEMAIL: ${{ inputs.debemail }}
+          INPUT_CLEANUP: ${{ inputs.cleanup }}
+        run: bash ./.github/scripts/resolve-config.sh
+
   select-matrix-assets:
     name: Select build assets
+    needs: resolve-config
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
+      job_count: ${{ steps.generate.outputs.job_count }}
     steps:
-      - name: Checkout matrix asset files
-        uses: actions/checkout@v4
+      - name: Checkout matrix configuration
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           sparse-checkout: |
@@ -107,59 +176,56 @@ jobs:
         id: generate
         shell: bash
         env:
-          MATRIX_ASSETS: ${{ inputs.matrix_assets }}
+          MATRIX_ASSETS: ${{ needs.resolve-config.outputs.matrix_assets }}
         run: bash ./.github/scripts/generate-matrix.sh
 
-  prepare-release:
-    name: Create signed tag and release
-    needs: select-matrix-assets
+  resolve-version:
+    name: Resolve build version
+    needs: resolve-config
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
-      RELEASE_TAG: ${{ inputs.version }}-${{ inputs.release_suffix }}
-      RELEASE_TITLE: ${{ inputs.release_name }} ${{ inputs.version }}
-      DEBFULLNAME: ${{ inputs.debfullname }}
-      DEBEMAIL: ${{ inputs.debemail }}
+    outputs:
+      mode: ${{ steps.resolve.outputs.mode }}
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
-      - name: Checkout commit to release
-        uses: actions/checkout@v4
+      - name: Checkout tags
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
+          fetch-tags: true
 
-      - name: Sign target tag and release
+      - name: Resolve version and tag
+        id: resolve
         shell: bash
-        run: ./.github/scripts/prepare-release.sh
+        env:
+          BUILD_MODE: ${{ needs.resolve-config.outputs.build_mode }}
+          VERSION_PREFIX: ${{ needs.resolve-config.outputs.version_prefix }}
+        run: ./.github/scripts/resolve-version.sh
 
   dm-matrix:
     name: ${{ matrix.release_flavor }}
     needs:
+      - resolve-config
       - select-matrix-assets
-      - prepare-release
+      - resolve-version
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.select-matrix-assets.outputs.matrix) }}
     uses: ./.github/workflows/container.yaml
     with:
-      # Shared top-level release values.
-      release_name: ${{ inputs.release_name }}
-      freshness: ${{ inputs.freshness }}
-      dist_build_redistributable: ${{ inputs.dist_build_redistributable }}
-      allow_untagged: ${{ inputs.allow_untagged }}
-      allow_uncommitted: ${{ inputs.allow_uncommitted }}
-      allow_unfrozen: ${{ inputs.allow_unfrozen }}
-      remote_derivative_packages: ${{ inputs.remote_derivative_packages }}
-      version: ${{ inputs.version }}
-      release_tag: ${{ inputs.version }}-${{ inputs.release_suffix }}
-      debfullname: ${{ inputs.debfullname }}
-      debemail: ${{ inputs.debemail }}
-
-      # Per-build values from the selected asset files.
+      build_mode: ${{ needs.resolve-config.outputs.build_mode }}
+      freshness: ${{ needs.resolve-config.outputs.freshness }}
+      dist_build_redistributable: ${{ needs.resolve-config.outputs.dist_build_redistributable == 'true' }}
+      allow_untagged: ${{ needs.resolve-config.outputs.allow_untagged == 'true' }}
+      allow_uncommitted: ${{ needs.resolve-config.outputs.allow_uncommitted == 'true' }}
+      allow_unfrozen: ${{ needs.resolve-config.outputs.allow_unfrozen == 'true' }}
+      remote_derivative_packages: ${{ needs.resolve-config.outputs.remote_derivative_packages == 'true' }}
+      version: ${{ needs.resolve-version.outputs.version }}
+      release_tag: ${{ needs.resolve-version.outputs.tag }}
       release_flavor: ${{ matrix.release_flavor }}
+      artifact_id: ${{ matrix.id }}
       flavors_list: ${{ matrix.flavors_list }}
       dist_build_multi_target_list: ${{ matrix.target }}
       arch: ${{ matrix.arch }}
@@ -168,26 +234,47 @@ jobs:
       flavor_meta_packages_to_install: ${{ matrix.flavor_meta_packages_to_install }}
       install_package_list: ${{ matrix.install_package_list }}
       derivative_apt_repository_opts: ${{ matrix.derivative_apt_repository_opts }}
+      debfullname: ${{ needs.resolve-config.outputs.debfullname }}
+      debemail: ${{ needs.resolve-config.outputs.debemail }}
+      cleanup: ${{ needs.resolve-config.outputs.cleanup == 'true' }}
+      update_approx_cache: ${{ needs.select-matrix-assets.outputs.job_count == '1' }}
     secrets: inherit
 
-  publish-release-notes:
-    name: Append matrix build notes
+  publish:
+    name: Publish Merged Matrix Release
     needs:
-      - prepare-release
+      - resolve-config
+      - resolve-version
       - dm-matrix
-    if: ${{ always() && !cancelled() && needs.prepare-release.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_TAG: ${{ inputs.version }}-${{ inputs.release_suffix }}
+      CI_PRIVATE_KEY: ${{ secrets.CI_PRIVATE_KEY }}
+      GIT_URL: "${{ github.server_url }}/${{ github.repository }}"
+      BUILD_MODE: ${{ needs.resolve-version.outputs.mode }}
+      BUILD_VERSION: ${{ needs.resolve-version.outputs.version }}
+      RELEASE_TAG: ${{ needs.resolve-version.outputs.tag }}
+      RELEASE_TITLE: ${{ needs.resolve-config.outputs.release_name }}
+      DEBFULLNAME: ${{ needs.resolve-config.outputs.debfullname }}
+      DEBEMAIL: ${{ needs.resolve-config.outputs.debemail }}
     steps:
-      - name: Checkout repository scripts
-        uses: actions/checkout@v4
+      - name: Checkout Publisher Scripts
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
 
-      - name: Run release notes publisher
+      - name: Download Matrix Outputs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: derivative-${{ github.run_id }}-*
+          path: release-artifacts
+
+      - name: Publish Release
         shell: bash
-        run: ./.github/scripts/publish-release-notes.sh
+        run: ./.github/scripts/publish-release.sh
+

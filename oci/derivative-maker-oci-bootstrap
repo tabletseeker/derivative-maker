@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-## Copyright (C) 2025 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
-## See the file COPYING for copying conditions.
-## This script is executed inside the container and provides basic commands to
-## prepare and configure a minimal debian container image.
 
-set -x
+## Copyright (C) 2026-2027 tabletseeker <tabletseeker-git@protonmail.com>
+## See the LICENSE for conditions of reproduction or redistribution.
+## All rights reserved by the repository maintainer
+
 set -o errexit
 set -o nounset
 set -o pipefail

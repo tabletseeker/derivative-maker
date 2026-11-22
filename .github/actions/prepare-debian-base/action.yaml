@@ -1,0 +1,73 @@
+## Copyright (C) 2026-2027 tabletseeker <tabletseeker-git@protonmail.com>
+## See the LICENSE for conditions of reproduction or redistribution.
+## All rights reserved by the repository maintainer
+
+name: Prepare Debian Trixie Base Image
+description: Restore or build, verify, and cache the base Debian Trixie QCOW2 VM image.
+
+inputs:
+  output_path:
+    description: Output QCOW2 image path
+    required: false
+    default: debian-base.qcow2
+  disk_size:
+    description: Target virtual disk size
+    required: false
+    default: 75G
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Debian Cloud Image State
+      id: cloud-images
+      shell: bash
+      run: |
+        ref="$(bash ./.github/scripts/build-debian-vm-base.sh --resolve)"
+        echo "Resolved Debian Cloud Team revision: ${ref}"
+        echo "ref=${ref}" | tee -a -- "${GITHUB_OUTPUT}"
+
+    - name: Restore Debian Trixie Base Image
+      id: restore-base-image
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          ${{ inputs.output_path }}
+          ${{ inputs.output_path }}.buildinfo
+        key: >-
+          ${{ format(
+            'debian-trixie-base-{0}-{1}',
+            steps.cloud-images.outputs.ref,
+            hashFiles(
+              '.github/scripts/build-debian-vm-base.sh',
+              '.github/scripts/setup-host.sh',
+              '.github/scripts/verify-debian-vm-base.sh'
+            )
+          ) }}
+
+    - name: Build Debian Trixie Base Image
+      if: steps.restore-base-image.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        CLOUD_IMAGES_REF: ${{ steps.cloud-images.outputs.ref }}
+      run: >-
+        bash ./.github/scripts/build-debian-vm-base.sh
+        "${{ inputs.output_path }}"
+        "${{ inputs.disk_size }}"
+
+    - name: Verify Debian Trixie Base Image
+      shell: bash
+      run: >-
+        bash ./.github/scripts/verify-debian-vm-base.sh
+        --ref "${{ steps.cloud-images.outputs.ref }}"
+        --size "${{ inputs.disk_size }}"
+        "${{ inputs.output_path }}"
+
+    - name: Save Debian Trixie Base Image
+      if: steps.restore-base-image.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: |
+          ${{ inputs.output_path }}
+          ${{ inputs.output_path }}.buildinfo
+        key: ${{ steps.restore-base-image.outputs.cache-primary-key }}
+

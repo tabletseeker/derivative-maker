@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-set -x
+## Copyright (C) 2026-2027 tabletseeker <tabletseeker-git@protonmail.com>
+## See the LICENSE for conditions of reproduction or redistribution.
+## All rights reserved by the repository maintainer
+
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -137,4 +140,10 @@ fi
 matrix="$(jq -c -s '.' "${FILES[@]}")"
 
 printf 'Selected %d asset(s): %s\n' "${#FILES[@]}" "${ASSET_IDS[*]}"
-printf 'matrix=%s\n' "${matrix}" >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
+printf 'Generated matrix: %s\n' "${matrix}"
+
+cat <<EOF >> "${GITHUB_OUTPUT:?GITHUB_OUTPUT is not set}"
+matrix=${matrix}
+job_count=${#FILES[@]}
+EOF
+
