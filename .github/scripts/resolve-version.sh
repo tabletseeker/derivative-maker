@@ -38,13 +38,13 @@ case "${BUILD_MODE}" in
     version="${VERSION_PREFIX}.$((highest + 1))"
     tag="${version}-release"
     ;;
-  nightly)
+  nightly|cache)
     if ((highest == 0)); then
       version="${VERSION_PREFIX}.1"
     else
       version="${VERSION_PREFIX}.${highest}"
     fi
-    tag="nightly"
+    tag="${BUILD_MODE}"
     ;;
   *)
     echo "Unsupported BUILD_MODE: ${BUILD_MODE}" >&2

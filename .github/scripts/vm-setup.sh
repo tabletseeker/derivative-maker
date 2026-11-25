@@ -16,7 +16,7 @@ WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 VM_HELPER="${SCRIPT_DIR}/vm-sync-helper.sh"
 
 # Ephemeral loopback network setup
-echo "Generating an ephemeral SSH keypair on the host runner..."
+echo "== Generating an ephemeral SSH keypair on the host runner =="
 ssh-keygen -t ed25519 -N "" -f ./id_ed25519
 
 cat > user-data <<EOF
@@ -37,7 +37,7 @@ rm -f -- build-work.qcow2
 qemu-img create -f qcow2 -F qcow2 -b debian-base.qcow2 build-work.qcow2
 
 # Launch QEMU Instance Engine
-echo "Launching hardware-accelerated QEMU instance..."
+echo "== Launching hardware-accelerated QEMU instance =="
 sudo qemu-system-x86_64 \
   -enable-kvm \
   -m 8G \
@@ -52,11 +52,11 @@ sudo qemu-system-x86_64 \
   -device virtio-net-pci,netdev=n0 \
   -serial file:vm_output.log &
 
-echo "Streaming Guest OS /dev/ttyS0"
+echo "== Streaming Guest OS /dev/ttyS0 =="
 tail -f vm_output.log > >(sed 's/^/[VM LOG] /') &
 TAIL_PID=$!
 
-echo "Waiting for guest OS initialization..."
+echo "== Waiting for guest OS initialization =="
 until "${VM_HELPER}" exec true >/dev/null 2>&1; do
   sleep 2
 done
@@ -64,7 +64,7 @@ done
 # Wait for actual cloud init pass
 "${VM_HELPER}" exec cloud-init status --wait >/dev/null || true
 
-echo "VM Boot completed successfully. Ending tty stream."
+echo "== VM Boot completed successfully. Ending tty stream. =="
 kill "${TAIL_PID}" 2>/dev/null || true
 
 # Provision container toolchain before restoring caches
@@ -76,7 +76,7 @@ kill "${TAIL_PID}" 2>/dev/null || true
 # Load saved Buildah OCI container image
 "${VM_HELPER}" restore-oci-image "${WORKSPACE_DIR}/oci-image.tar.zst"
 
-echo "Host runner: Executing deployment pipeline..."
+echo "== Host runner: Executing deployment pipeline =="
 ssh -i ./id_ed25519 -p 2222 \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
@@ -118,5 +118,5 @@ ssh -i ./id_ed25519 -p 2222 \
      dist_build_redistributable='${dist_build_redistributable:-}' \
      sudo -E -u debian bash -s" < "${SCRIPT_DIR}/vm-build.sh" 2>&1 | tee "${WORKSPACE_DIR}/build.log"
 
-echo "[+] Workspace artifact build block completed. Keeping VM alive for extraction phase."
+echo "== Workspace artifact build block completed. Keeping VM alive for extraction phase =="
 

@@ -277,10 +277,10 @@ x15+hH4UaNiokXAm6hz08dTIq+hWXtGCdkU=
 [authorization."tabletseeker-ci <tabletseeker-ci@github.com>"]
 sign_commit = true
 sign_tag = true
-sign_archive = false
-add_user = false
-retire_user = false
-audit = false
+sign_archive = true
+add_user = true
+retire_user = true
+audit = true
 keyring = """
 -----BEGIN PGP PUBLIC KEY BLOCK-----
 Comment: 0DDA E015 C746 C3B3 9355  7EC7 4BC5 21A9 2BCA 11CF

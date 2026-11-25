@@ -163,6 +163,6 @@ backing_file="$(jq -r '.["backing-filename"] // empty' <<< "${image_json}")"
 [[ "${virtual_size}" == "${EXPECTED_VIRTUAL_BYTES}" ]] ||
   die "Unexpected virtual size '${virtual_size}' bytes (expected ${EXPECTED_DISK_SIZE})."
 
-printf 'Verified QCOW2 ref=%s size=%s sha512=%s...\n' \
-  "${recorded_ref}" "${EXPECTED_DISK_SIZE}" "${recorded_sha512:0:16}"
+printf 'Verified QCOW2 ref=%s size=%s sha512=%s\n' \
+  "${recorded_ref}" "${EXPECTED_DISK_SIZE}" "${recorded_sha512}"
 

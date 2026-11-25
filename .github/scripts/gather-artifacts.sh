@@ -33,9 +33,6 @@ rm -rf -- "${STAGING_DIR}"
 mkdir -p -- "${STAGING_DIR}"
 
 "${VM_HELPER}" pull-artifacts "${STAGING_DIR}"
-"${VM_HELPER}" save-cache "${WORKSPACE_DIR}/approx-cache.tar.zst"
-"${VM_HELPER}" save-oci-image "${WORKSPACE_DIR}/oci-image.tar.zst"
-"${VM_HELPER}" shutdown-vm "${WORKSPACE_DIR}/qemu.pid"
 
 if ! find "${STAGING_DIR}" -maxdepth 1 -type f -print -quit | grep -q .; then
   echo "ERROR: No build artifacts were collected." >&2
