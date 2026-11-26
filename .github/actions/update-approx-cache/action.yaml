@@ -55,7 +55,15 @@ runs:
         GH_TOKEN: ${{ inputs.github_token }}
         APPROX_PREFIX: ${{ inputs.cache_prefix }}
       run: |
+        if [[ "${APPROX_PREFIX}" =~ ^approx-trixie-frozen-[^-]+-([^-]+)-$ ]]; then
+          prune_regex="^approx-trixie-frozen-[^-]+-${BASH_REMATCH[1]}-"
+        else
+          prune_regex="^${APPROX_PREFIX}"
+        fi
+        export prune_regex
+
         gh cache list --repo "${{ github.repository }}" --limit 100 --json id,key,createdAt \
-          --jq '[.[] | select(.key | startswith(env.APPROX_PREFIX))] | sort_by(.createdAt) | .[:-1] | .[].id' | \
+          --jq '[.[] | select(.key | test(env.prune_regex))] | sort_by(.createdAt) | .[:-1] | .[].id' | \
           xargs -r -n 1 gh cache delete --repo "${{ github.repository }}"
+
 

@@ -18,7 +18,7 @@ export OCI_USER="user"
 export DM_SNAPSHOT_LABEL="org.kicksecure.derivative-maker.frozen-snapshot"
 export SOURCE_VOLUME="$( dirname -- "${OCI_DIR}" )"
 export HOST_USER_ID="$(id -u)"
-export ALLOW_UNFROZEN="${ALLOW_UNFROZEN:-false}"
+export BUILD_FRESHNESS="${BUILD_FRESHNESS:-frozen}"
 
 ENGINE="${ENGINE:-podman}"
 CONTAINER_STORAGE="${HOME}/.local/share/containers/storage"
@@ -147,7 +147,7 @@ container_image() {
             local active_label
             active_label=$(buildah inspect --format "{{index .OCIv1.Config.Labels \"${DM_SNAPSHOT_LABEL}\"}}" "${IMAGE_REF}" 2>/dev/null) || active_label=""
             ## Check if tracking tokens match perfectly
-            if [[ "${ALLOW_UNFROZEN}" == "true" ]] || [[ "${active_label}" == "${snapshot_ts}" && -n "${active_label}" ]]; then
+            if [[ "${BUILD_FRESHNESS}" == "current" ]] || [[ "${active_label}" == "${snapshot_ts}" && -n "${active_label}" ]]; then
                     # Container image up to date but not loaded yet
                     engine_check_image || engine_sync_image
                     return 0
@@ -207,7 +207,7 @@ sudo ${ENGINE} exec "${tty_opts[@]}" \
   --env "dist_build_target_arch=${dist_build_target_arch:-}" \
   --env "dist_build_multi_target_list=${dist_build_multi_target_list:-}" \
   --env "dist_build_version_type=${dist_build_version_type:-}" \
-  --env "dist_build_freshness=${dist_build_freshness:-}" \
+  --env "dist_build_freshness=${dist_build_freshness:-frozen}" \
   --env "dist_build_redistributable=${dist_build_redistributable:-}" \
   "${CONTAINER_INSTANCE_NAME}" \
   "${COMMAND}" "${COMMAND_ARGS[@]}"

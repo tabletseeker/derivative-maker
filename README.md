@@ -11,7 +11,7 @@
 A community project, maintained by Whonix contributors, that provides **100%** transparency and reproducibility of the entire **Kicksecure** and **Whonix** build process by delivering upstream identical, cryptographically signed production releases, using the official `derivative-maker` build scripts, while executing and publishing the complete pipeline via GitHub Actions CI, featuring detailed trace logs of every single executed command, live tracking of every individual stage and a 24h rotating nightly tag. To ensure maximum security and consistency, all CI build runners are encapsulated inside an accelerated QEMU guest, based on a pinned Debian Trixie Cloud image, which itself is assembled and verified during the build.
 Every tag and release asset is publicly created, tracked, signed, verified and uploaded directly via Github CI & Releases, without the use or involvement of any external servers, tools or third parties.
 <p align="center">
-<img src="https://github.com/tabletseeker/whonix-cloud/blob/master/media/runner.webp" width=100% height=100%>
+<img src="https://github.com/tabletseeker/whonix-cloud/blob/master/media/runner.png" width=100% height=100%>
 </p>
 
 ## Roadmap
@@ -83,7 +83,7 @@ Ready-to-use images are published automatically to the https://github.com/tablet
   <img src="https://github.com/tabletseeker/whonix-cloud/blob/master/media/manifest.png" width=50% height=50%>
 
   2. Collapsed and flavor sorted assets display.
-    
+
   <img src="https://github.com/tabletseeker/whonix-cloud/blob/master/media/downloads.png" width=80% height=80%>
 
   3.  Full assets list that combines all artifacts.
@@ -132,12 +132,12 @@ Added files:
   - media/*
   - README.md
 ```
-Reason: 
-* Upgrade deprecated and semi-closed source `derivative-maker-docker`
-  * This docker implementation for derivative-maker was originally based on a contributed hobby project of mine, called [whonix-builder](https://github.com/tabletseeker/whonix_builder).
+Reason:
+* Upgrade deprecated and semi-closed source (docker) `derivative-maker-docker`
+  * This docker implementation for derivative-maker was originally designed and later contributed/refined by @tabletseeker, called [whonix-builder](https://github.com/tabletseeker/whonix_builder).
   * The new `derivative-maker-oci` improves systemd initialization, modernizes/simplifies the codebase using buildah and enables the use of multiple (open) engines, i.e. podman, nerdctl, buildah, colima etc.
 * Enable signing setup and buildconfig.d optimization
-* Implement Whonix-Cloud CI Workflows and Scripts 
+* Implement Whonix-Cloud CI Workflows and Scripts
 
 Modified derivative-maker files:
 
@@ -150,12 +150,39 @@ Modified derivative-maker files:
 
   PR URL: https://github.com/adrelanos/derivative-maker/pull/5
 
-My (@tabletseeker) upstream commits:
+All @tabletseeker upstream commits (condensed):
 https://github.com/adrelanos/derivative-maker/commits?author=tabletseeker&before=077c50645bebdb4d871abdb91a55a6f2f8a63701+35
 
 All current upstream contributors:
 https://github.com/adrelanos/derivative-maker/graphs/contributors?all=1
 
+All `whonix-cloud` commits (at the time of writing):
+
+* [`30ece25fc`](https://github.com/tabletseeker/whonix-cloud/commit/30ece25fc6386e89c6e8e66196220f7cb223c9db) - ci: improving frozen logic
+* [`dd7273628`](https://github.com/tabletseeker/whonix-cloud/commit/dd72736282b070415e385831c64d5e9deb2a7706) - legal: adding license & name change
+* [`bc9b4bb14`](https://github.com/tabletseeker/whonix-cloud/commit/bc9b4bb14cc5dda26d9e663f3fd259994db11596) - promote: merging current testing
+* [`dd300037c`](https://github.com/tabletseeker/whonix-cloud/commit/dd300037c8a104d039a242b0a14919561feec741) - ci: adding dedicated matrix cache asset
+* [`01ba90170`](https://github.com/tabletseeker/whonix-cloud/commit/01ba90170804cbd31beace2be6824da5d0510448) - promote: merging current testing
+* [`598e05536`](https://github.com/tabletseeker/whonix-cloud/commit/598e05536fef9504efe6112acaaafad1d345cc6d) - promote: merging current upstream
+* [`e2f92e0c4`](https://github.com/tabletseeker/whonix-cloud/commit/e2f92e0c4bcb7c16809a4283fd55635c7ae62642) - ci: improving notes display
+* [`059b1b9c1`](https://github.com/tabletseeker/whonix-cloud/commit/059b1b9c15700d5dbbbb06f0132cf0a6af9d384c) - ci: improving workflow
+* [`3580316a6`](https://github.com/tabletseeker/whonix-cloud/commit/3580316a6586968da53313fc6f746629cec922b2) - ci: adding oci image cache
+* [`345a2a3ca`](https://github.com/tabletseeker/whonix-cloud/commit/345a2a3cad18a877dde695bdc01ced4da2097494) - legal: adding copyright
+* [`525a8920a`](https://github.com/tabletseeker/whonix-cloud/commit/525a8920ab923e330f23b638cc3dd028de047527) - ci: adding native approx cache & vm helper
+* [`612b145bf`](https://github.com/tabletseeker/whonix-cloud/commit/612b145bfe6075eff2ab929ab56991b7dd085801) - ci: adding vm image verification
+* [`fc036d915`](https://github.com/tabletseeker/whonix-cloud/commit/fc036d9159b01c15b6620c131c33ea0f21e82138) - ci: adding vm image build step
+* [`336b1b68c`](https://github.com/tabletseeker/whonix-cloud/commit/336b1b68ca8c739d90024477bea59bcf8dfe7532) - promote: merging current testing state
+* [`58dca5ad8`](https://github.com/tabletseeker/whonix-cloud/commit/58dca5ad84345f8a26bc4977b3d7baeb601209fa) - ci: adding automated builds
+* [`49ca5e7e7`](https://github.com/tabletseeker/whonix-cloud/commit/49ca5e7e707227f018b3f89315f8aaa88b25358c) - ci: expand matrix assets & improve tag logic
+* [`1f8d2e9fe`](https://github.com/tabletseeker/whonix-cloud/commit/1f8d2e9fefa140f845da77acbe4af3b867df3b6e) - ci: matrix orchestrator & repo secrets
+* [`1364489d3`](https://github.com/tabletseeker/whonix-cloud/commit/1364489d321b1953959a04af6e495de82e98390c) - ci: implementing matrix builds
+* [`ec5dce3b5`](https://github.com/tabletseeker/whonix-cloud/commit/ec5dce3b5ad3a5da301bef335c00b822de0f3644) - ownership: adding low-privilege CI key
+* [`597685a22`](https://github.com/tabletseeker/whonix-cloud/commit/597685a226915b40b7b9edc5cb0990376ce9547f) - ci: finalizing artifacts display
+* [`aae5f36fd`](https://github.com/tabletseeker/whonix-cloud/commit/aae5f36fd6f8f9cbc34810064f3d94f44fd83c5e) - ci: switching to dm-build-official
+* [`978e9460e`](https://github.com/tabletseeker/whonix-cloud/commit/978e9460e5c779ce4f80c8c15b7dd55db2830e62) - ci: minor rev before test phase
+* [`ffb524782`](https://github.com/tabletseeker/whonix-cloud/commit/ffb524782e5654221d45a63fe731f2c574785962) - ci: setting up testing env
+* [`1c32d5456`](https://github.com/tabletseeker/whonix-cloud/commit/1c32d545646e371f684bf9a991b354a9de35a01e) - ownership: adding low-privilege CI key
+* [`dd6a61e67`](https://github.com/tabletseeker/whonix-cloud/commit/dd6a61e67cb0fabedc8c04be7f2f24f8799e3f95) - ownership: adding tabletseeker as maintainer
 
 [🔼 Back to Top](#roadmap)
 
@@ -302,7 +329,7 @@ Three cache layers persist state across ephemeral GitHub Actions runners without
     debian-trixie-base-cc29a4adc3366b4739b388dc862fd17bad6c2835-1f9f89a2c4d1e787e1475274fba98866b16706578f1c66642e8f73b0b29e8c99
     ```
 2. **Buildah OCI Container Image (`oci-image.tar.zst`):**
-   * `oci/derivative-maker-oci-run` forms the basis for every run, assembles the base container image via buildah and exports it to the chosen build engine. In this case podman is used to launch the build container. Depending on whether frozen (official) or unfrozen (nightly) sources are used, two separate caches will be generated. Whenever the hashed oci files or weekly ISO identifier change, the container image is automatically rebuilt. 
+   * `oci/derivative-maker-oci-run` forms the basis for every run, assembles the base container image via buildah and exports it to the chosen build engine. In this case podman is used to launch the build container. Depending on whether frozen (official) or unfrozen (nightly) sources are used, two separate caches will be generated. Whenever the hashed oci files or weekly ISO identifier change, the container image is automatically rebuilt.
 
     Example Cache:
     ```
@@ -315,7 +342,7 @@ Three cache layers persist state across ephemeral GitHub Actions runners without
 
 4. **Approx APT Cache (`approx-cache.tar.zst`):**
    * The largest of all weekly caches, generated cumulatively across multiple builds or cache runs. The approx cache is always restored, but only saved if it has grown by a reasonable amount.      It can be specific to certain flavors or runners using specialized package lists.
-   
+
     Example Cache:
     ```
     # current ISO Week: week="$(date -u +%G-W%V)"
@@ -419,7 +446,7 @@ See [🔼 Derivative-Maker-OCI](https://github.com/tabletseeker/whonix-cloud/blo
 
 ## Credits 🥇
 
-**Huge** thanks to **Patrick** aka @adrelanos and his awesome team for `derivative-maker` and their pioneering work on security-hardened Debian derivatives, as well as the **Debian Cloud Team** for `debian-cloud-images`! 
+**Huge** thanks to **Patrick** aka @adrelanos and his awesome team for `derivative-maker` and their pioneering work on security-hardened Debian derivatives, as well as the **Debian Cloud Team** for `debian-cloud-images`!
 
 🎉 HulaHoopWhonix, Mycobee, velnias75, GavinPacini, Algernon-01, JasonJAyalaP, onions-knight, coquizen. Karim13014, HulaHoop0, unman, alisa-rend, JeremyRand 🎉
 

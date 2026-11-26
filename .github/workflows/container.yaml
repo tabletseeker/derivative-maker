@@ -55,10 +55,6 @@ on:
         description: "Allow uncommitted source changes"
         required: true
         type: boolean
-      allow_unfrozen:
-        description: "Allow unfrozen sources"
-        required: true
-        type: boolean
       remote_derivative_packages:
         description: "Use remote derivative packages"
         required: true
@@ -124,7 +120,6 @@ jobs:
       RELEASE_FLAVOR: ${{ inputs.release_flavor }}
       ALLOW_UNTAGGED: ${{ inputs.allow_untagged }}
       ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
-      ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
       ALLOW_REMOTE: ${{ inputs.remote_derivative_packages }}
       DEBFULLNAME: ${{ inputs.debfullname }}
       DEBEMAIL: ${{ inputs.debemail }}
@@ -155,13 +150,23 @@ jobs:
       - name: Prepare Cache Metadata
         id: cache-meta
         shell: bash
+        env:
+          FRESHNESS: ${{ inputs.freshness }}
+          SNAP_HASH: ${{ hashFiles('build_sources/frozen-snapshot-timestamp') }}
+          ARCH: ${{ inputs.arch }}
+          RUN_ID: ${{ github.run_id }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
         run: |
-          week="$(date -u +%G-W%V)"
-          prefix="approx-trixie-${week}-${{ inputs.arch }}-"
+          if [ "${FRESHNESS}" = "frozen" ]; then
+            tier="frozen-${SNAP_HASH}"
+          else
+            tier="current-$(date -u +%G-W%V)"
+          fi
+          prefix="approx-trixie-${tier}-${ARCH}-"
           {
-            echo "week=${week}"
+            echo "tier=${tier}"
             echo "approx_prefix=${prefix}"
-            echo "approx_key=${prefix}${{ github.run_id }}-${{ inputs.artifact_id }}"
+            echo "approx_key=${prefix}${RUN_ID}-${ARTIFACT_ID}"
           } | tee -a -- "${GITHUB_OUTPUT}"
 
       - name: Prepare Debian Trixie Base Image
@@ -172,24 +177,12 @@ jobs:
         with:
           path: oci-image.tar.zst
           key: >-
-            ${{
-              inputs.allow_unfrozen
-                && format(
-                  'oci-trixie-unfrozen-{0}-{1}-{2}',
-                  inputs.arch,
-                  steps.cache-meta.outputs.week,
-                  hashFiles('oci/*')
-                )
-                || format(
-                  'oci-trixie-frozen-{0}-{1}',
-                  inputs.arch,
-                  hashFiles(
-                    'oci/*',
-                    'build_sources/frozen-snapshot-timestamp',
-                    'build_sources/debian_stable_frozen_direct_clearnet.sources.in'
-                  )
-                )
-            }}
+            ${{ format(
+              'oci-trixie-{0}-{1}-{2}',
+              steps.cache-meta.outputs.tier,
+              inputs.arch,
+              hashFiles('oci/*', 'build_sources/debian_stable_frozen_direct_clearnet.sources.in')
+            ) }}
 
       - name: Restore Approx Package Repository
         uses: actions/cache/restore@v5

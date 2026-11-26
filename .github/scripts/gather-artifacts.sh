@@ -71,8 +71,7 @@ else
   GIT_CLEAN_STR="✅ Clean Tree"
 fi
 
-if [[ "${ALLOW_UNFROZEN:-false}" == "true" ||
-      "${BUILD_FRESHNESS:-unknown}" != "frozen" ]]; then
+if [[ "${BUILD_FRESHNESS:-frozen}" != "frozen" ]]; then
   FROZEN_SRC_STR="🔥 Unfrozen"
 else
   FROZEN_SRC_STR="🧊 Frozen"

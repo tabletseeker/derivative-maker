@@ -5,6 +5,12 @@
 name: Whonix Cloud Matrix
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - "build_sources/frozen-snapshot-timestamp"
+
   workflow_dispatch:
     inputs:
       build_mode:
@@ -62,12 +68,6 @@ on:
         default: false
         type: boolean
 
-      allow_unfrozen:
-        description: "Allow unfrozen sources"
-        required: false
-        default: false
-        type: boolean
-
       remote_derivative_packages:
         description: "Use remote derivative packages"
         required: false
@@ -111,7 +111,8 @@ concurrency:
     whonix-cloud-${{
       inputs.version_prefix || vars.DEFAULT_VERSION_PREFIX
     }}-${{
-      (github.event_name == 'schedule' && github.event.schedule == '5 0 * * 1') && 'cache' ||
+      (github.event_name == 'push') && 'cache-frozen' ||
+      (github.event_name == 'schedule' && github.event.schedule == '5 0 * * 1') && 'cache-current' ||
       (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') && 'nightly' ||
       (inputs.build_mode || 'release')
     }}
@@ -131,7 +132,6 @@ jobs:
       dist_build_redistributable: ${{ steps.config.outputs.dist_build_redistributable }}
       allow_untagged: ${{ steps.config.outputs.allow_untagged }}
       allow_uncommitted: ${{ steps.config.outputs.allow_uncommitted }}
-      allow_unfrozen: ${{ steps.config.outputs.allow_unfrozen }}
       remote_derivative_packages: ${{ steps.config.outputs.remote_derivative_packages }}
       debfullname: ${{ steps.config.outputs.debfullname }}
       debemail: ${{ steps.config.outputs.debemail }}
@@ -160,7 +160,6 @@ jobs:
           INPUT_DIST_BUILD_REDISTRIBUTABLE: ${{ inputs.dist_build_redistributable }}
           INPUT_ALLOW_UNTAGGED: ${{ inputs.allow_untagged }}
           INPUT_ALLOW_UNCOMMITTED: ${{ inputs.allow_uncommitted }}
-          INPUT_ALLOW_UNFROZEN: ${{ inputs.allow_unfrozen }}
           INPUT_REMOTE_DERIVATIVE_PACKAGES: ${{ inputs.remote_derivative_packages }}
           INPUT_DEBFULLNAME: ${{ inputs.debfullname }}
           INPUT_DEBEMAIL: ${{ inputs.debemail }}
@@ -232,7 +231,6 @@ jobs:
       dist_build_redistributable: ${{ needs.resolve-config.outputs.dist_build_redistributable == 'true' }}
       allow_untagged: ${{ needs.resolve-config.outputs.allow_untagged == 'true' }}
       allow_uncommitted: ${{ needs.resolve-config.outputs.allow_uncommitted == 'true' }}
-      allow_unfrozen: ${{ needs.resolve-config.outputs.allow_unfrozen == 'true' }}
       remote_derivative_packages: ${{ needs.resolve-config.outputs.remote_derivative_packages == 'true' }}
       version: ${{ needs.resolve-version.outputs.version }}
       release_tag: ${{ needs.resolve-version.outputs.tag }}

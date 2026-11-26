@@ -94,11 +94,11 @@ EOF
 
 if [[ "${BUILD_MODE:-}" == "cache" ]]; then
   cat << 'EOF' >> "${DM_CONFIG_DIR}/30_ci-override.conf"
-export dist_build_max_jobs="$(nproc)"
-export dist_build_reuse_cowbuilder_base="true"
-export XZ_OPT="-T0 -1"
-export SKIP_SCRIPTS="${SKIP_SCRIPTS:-} 1600_export-libvirt-xml 1700_create-vm-text 4310_convert-raw-to-iso 4350_reimage-raw-reproducible 4400_convert-raw-to-qcow2 4600_create-vbox-vm 4600_export-utm-packages 5100_create-report 5200_prepare-release dm-prepare-release dm-upload-images "
+export make_use_cowbuilder="false"
+export SKIP_SCRIPTS="${SKIP_SCRIPTS:-} 1100_sanity-tests 1130_cowbuilder-setup 1300_create-debian-packages 1550_copy-vms-into-raw 1600_export-libvirt-xml 1700_create-vm-text 2300_run-chroot-scripts-post-d 4310_convert-raw-to-iso 4350_reimage-raw-reproducible 4400_convert-raw-to-qcow2 4600_create-vbox-vm 4600_export-utm-packages 5100_create-report 5200_prepare-release dm-prepare-release dm-upload-images "
 EOF
+  echo "INFO: cache mode detected; skipping tag signing and git_sanity_test."
+  exit 0
 fi
 
 # Configure repo-local git with a valid identity.
