@@ -2,7 +2,7 @@
 ## See the LICENSE for conditions of reproduction or redistribution.
 ## All rights reserved by the repository maintainer
 
-name: Derivative-Maker Matrix
+name: Whonix Cloud Matrix
 
 on:
   workflow_dispatch:
@@ -20,11 +20,17 @@ on:
       matrix_assets:
         description: "Matrix asset selection"
         required: false
-        default: "all-amd64-kvm"
+        default: "cli-vm-amd64 kicksecure-lxqt-amd64-vm whonix-lxqt-amd64-vm"
         type: string
 
       version_prefix:
         description: "Version family"
+        required: false
+        default: ""
+        type: string
+
+      version_override:
+        description: "Custom Version"
         required: false
         default: ""
         type: string
@@ -102,7 +108,7 @@ permissions:
 
 concurrency:
   group: >-
-    derivative-maker-${{
+    whonix-cloud-${{
       inputs.version_prefix || vars.DEFAULT_VERSION_PREFIX
     }}-${{
       (github.event_name == 'schedule' && github.event.schedule == '5 0 * * 1') && 'cache' ||
@@ -119,6 +125,7 @@ jobs:
       build_mode: ${{ steps.config.outputs.build_mode }}
       matrix_assets: ${{ steps.config.outputs.matrix_assets }}
       version_prefix: ${{ steps.config.outputs.version_prefix }}
+      version_override: ${{ steps.config.outputs.version_override }}
       release_name: ${{ steps.config.outputs.release_name }}
       freshness: ${{ steps.config.outputs.freshness }}
       dist_build_redistributable: ${{ steps.config.outputs.dist_build_redistributable }}
@@ -147,6 +154,7 @@ jobs:
           INPUT_BUILD_MODE: ${{ inputs.build_mode }}
           INPUT_MATRIX_ASSETS: ${{ inputs.matrix_assets }}
           INPUT_VERSION_PREFIX: ${{ inputs.version_prefix }}
+          INPUT_VERSION_OVERRIDE: ${{ inputs.version_override }}
           INPUT_RELEASE_NAME: ${{ inputs.release_name }}
           INPUT_FRESHNESS: ${{ inputs.freshness }}
           INPUT_DIST_BUILD_REDISTRIBUTABLE: ${{ inputs.dist_build_redistributable }}
@@ -204,6 +212,7 @@ jobs:
         env:
           BUILD_MODE: ${{ needs.resolve-config.outputs.build_mode }}
           VERSION_PREFIX: ${{ needs.resolve-config.outputs.version_prefix }}
+          VERSION_OVERRIDE: ${{ needs.resolve-config.outputs.version_override }}
         run: ./.github/scripts/resolve-version.sh
 
   dm-matrix:
@@ -279,7 +288,7 @@ jobs:
       - name: Download Matrix Outputs
         uses: actions/download-artifact@v8
         with:
-          pattern: derivative-${{ github.run_id }}-*
+          pattern: whonix-cloud-${{ github.run_id }}-*
           path: release-artifacts
 
       - name: Publish Release

@@ -2,7 +2,7 @@
 ## See the LICENSE for conditions of reproduction or redistribution.
 ## All rights reserved by the repository maintainer
 
-name: Derivative Maker CI
+name: Whonix Cloud Worker
 
 on:
   workflow_call:
@@ -246,7 +246,7 @@ jobs:
         if: inputs.build_mode != 'cache'
         uses: actions/upload-artifact@v7
         with:
-          name: derivative-${{ github.run_id }}-${{ inputs.artifact_id }}
+          name: whonix-cloud-${{ github.run_id }}-${{ inputs.artifact_id }}
           path: release-staging/
           if-no-files-found: error
           retention-days: 1

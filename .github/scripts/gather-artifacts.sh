@@ -73,9 +73,9 @@ fi
 
 if [[ "${ALLOW_UNFROZEN:-false}" == "true" ||
       "${BUILD_FRESHNESS:-unknown}" != "frozen" ]]; then
-  FROZEN_SRC_STR="⚠️ Unfrozen"
+  FROZEN_SRC_STR="🔥 Unfrozen"
 else
-  FROZEN_SRC_STR="✅ Frozen"
+  FROZEN_SRC_STR="🧊 Frozen"
 fi
 
 BUILD_TARGET_UPPER="${dist_build_multi_target_list:-}"

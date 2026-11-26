@@ -51,13 +51,13 @@ buildah config \
     --stop-signal SIGRTMIN+3 \
     --cmd "/sbin/init" \
     --label "${DM_SNAPSHOT_LABEL}=${snapshot_ts:-}" \
-    --label org.opencontainers.image.authors="adrelanos@whonix.org" \
-    --label org.opencontainers.image.description="Containerization of Kicksecure/derivative-maker" \
+    --label org.opencontainers.image.authors="tabletseeker-git@protonmail.com" \
+    --label org.opencontainers.image.description="Containerization of derivative-maker" \
     --label org.opencontainers.image.title="derivative-maker-oci" \
-    --label org.opencontainers.image.source="https://github.com/adrelanos/derivative-maker/tree/master" \
-    --label org.opencontainers.image.documentation="https://kicksecure.com" \
+    --label org.opencontainers.image.source="https://github.com/tabletseeker/whonix-cloud" \
+    --label org.opencontainers.image.documentation="https://github.com/tabletseeker/whonix-cloud/tree/master/oci" \
     --label org.opencontainers.image.version="1.0" \
-    --label org.opencontainers.image.vendor="ENCRYPTED SUPPORT LLC" \
+    --label org.opencontainers.image.vendor="tabletseeker@github" \
     "$ctr"
 
 buildah unmount "$ctr"

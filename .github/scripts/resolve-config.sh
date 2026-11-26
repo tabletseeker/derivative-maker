@@ -18,6 +18,7 @@ shopt -s shift_verbose
 build_mode="${INPUT_BUILD_MODE:-release}"
 matrix_assets="${INPUT_MATRIX_ASSETS:-all}"
 version_prefix="${INPUT_VERSION_PREFIX:-${DEFAULT_VERSION_PREFIX:-}}"
+version_override="${INPUT_VERSION_OVERRIDE:-}"
 release_name="${INPUT_RELEASE_NAME:-Production Release:}"
 freshness="${INPUT_FRESHNESS:-frozen}"
 dist_build_redistributable="${INPUT_DIST_BUILD_REDISTRIBUTABLE:-true}"
@@ -66,6 +67,7 @@ cat <<EOF >> "${GITHUB_OUTPUT}"
 build_mode=${build_mode}
 matrix_assets=${matrix_assets}
 version_prefix=${version_prefix}
+version_override=${version_override}
 release_name=${release_name}
 freshness=${freshness}
 dist_build_redistributable=${dist_build_redistributable}

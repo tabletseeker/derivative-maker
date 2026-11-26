@@ -21,6 +21,12 @@ if [[ ! "${VERSION_PREFIX}" =~ ^[0-9]+([.][0-9]+)*$ ]]; then
 fi
 
 escaped_prefix="${VERSION_PREFIX//./\\.}"
+
+if [[ -n "${VERSION_OVERRIDE:-}" ]] && [[ ! "${VERSION_OVERRIDE}" =~ ^${escaped_prefix}\.[0-9]+$ ]]; then
+  echo "Invalid VERSION_OVERRIDE '${VERSION_OVERRIDE}' for prefix '${VERSION_PREFIX}'" >&2
+  exit 1
+fi
+
 tag_pattern="^${escaped_prefix}\.([0-9]+)-release$"
 highest=0
 
@@ -35,11 +41,17 @@ done < <(git tag --list "${VERSION_PREFIX}.*-release")
 
 case "${BUILD_MODE}" in
   release)
-    version="${VERSION_PREFIX}.$((highest + 1))"
+    if [[ -n "${VERSION_OVERRIDE:-}" ]]; then
+      version="${VERSION_OVERRIDE}"
+    else
+      version="${VERSION_PREFIX}.$((highest + 1))"
+    fi
     tag="${version}-release"
     ;;
   nightly|cache)
-    if ((highest == 0)); then
+    if [[ -n "${VERSION_OVERRIDE:-}" ]]; then
+      version="${VERSION_OVERRIDE}"
+    elif ((highest == 0)); then
       version="${VERSION_PREFIX}.1"
     else
       version="${VERSION_PREFIX}.${highest}"
