@@ -111,15 +111,16 @@ git -C "${REPO_ROOT}" config tag.gpgSign true
 git -C "${REPO_ROOT}" remote set-url origin \
   "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" || true
 
-head_commit="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
-tag_commit="$(git -C "${REPO_ROOT}" rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}" 2>/dev/null || true)"
+# Ensure RELEASE_TAG is the sole tag pointing at HEAD so git_sanity_test is happy.
+while IFS= read -r existing_tag; do
+  [[ -z "${existing_tag}" || "${existing_tag}" == "${RELEASE_TAG}" ]] && continue
+  echo "INFO: Removing extra local tag '${existing_tag}' at HEAD."
+  git -C "${REPO_ROOT}" tag -d "${existing_tag}" >/dev/null
+done < <(git -C "${REPO_ROOT}" for-each-ref --points-at=HEAD --format='%(refname:strip=2)' refs/tags)
 
-if [[ "${tag_commit}" == "${head_commit}" ]]; then
-  echo "INFO: tag ${RELEASE_TAG} already points to HEAD (${head_commit}). Skipping creation."
-else
-  echo "INFO: tag ${RELEASE_TAG} is absent or points to ${tag_commit:-none}; signing onto HEAD (${head_commit})..."
-  git -C "${REPO_ROOT}" tag -s -f -m "${BUILD_MODE}: ${RELEASE_TAG}" "${RELEASE_TAG}" HEAD
-fi
+head_commit="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+echo "INFO: Signing tag '${RELEASE_TAG}' onto HEAD (${head_commit})"
+git -C "${REPO_ROOT}" tag -s -f -m "${BUILD_MODE}: ${RELEASE_TAG}" "${RELEASE_TAG}" HEAD
 
 # Verify the tag.
 git -C "${REPO_ROOT}" tag -v "${RELEASE_TAG}"
@@ -139,3 +140,4 @@ echo "=== signing-setup: single native verification pass ==="
 echo "INFO: signing setup complete."
 echo "INFO: tag present: ${RELEASE_TAG}"
 echo "INFO: signing key fingerprint: ${GPG_FINGERPRINT}"
+

@@ -11,7 +11,7 @@ set -o errtrace
 shopt -s inherit_errexit
 shopt -s shift_verbose
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE}")" && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${GITHUB_WORKSPACE:-$(pwd)}"
 VM_HELPER="${SCRIPT_DIR}/vm-sync-helper.sh"
 
@@ -103,6 +103,7 @@ ssh -i ./id_ed25519 -p 2222 \
      GIT_BRANCH='${GIT_BRANCH:-}' \
      GITHUB_TOKEN='${GITHUB_TOKEN:-}' \
      GITHUB_SHA='${GITHUB_SHA:-}' \
+     INTERACTIVE='${INTERACTIVE:-}' \
      CI_PRIVATE_KEY='${CI_PRIVATE_KEY:-}' \
      KEY_DIR='${KEY_DIR:-/home/debian/.key_mnt}' \
      KEY_FILE='${KEY_FILE:-/home/debian/.key_mnt/my-private-key.asc}' \

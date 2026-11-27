@@ -171,6 +171,12 @@ restore_cache() {
 
 save_cache() {
   local archive="$1"
+
+  if [[ "${UPDATE_APPROX_CACHE:-true}" != "true" ]]; then
+    log "Approx cache update disabled; skipping archive creation"
+    return 0
+  fi
+
   local tmp_archive="${archive}.tmp.$$"
   local rc=0
 
