@@ -250,7 +250,7 @@ jobs:
       update_approx_cache: >-
         ${{
           needs.select-matrix-assets.outputs.job_count == '1' ||
-          (needs.resolve-config.outputs.build_mode == 'cache' && startsWith(matrix.id, 'cache-'))
+          (needs.resolve-config.outputs.build_mode == 'cache' && contains(matrix.id, 'cache-'))
         }}
     secrets: inherit
 

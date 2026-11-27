@@ -15,12 +15,16 @@ PINNED_BASE_IMAGE="docker.io/library/debian:trixie-slim@sha256:cedb1ef40439206b6
 UNFROZEN_BASE_IMAGE="docker.io/library/debian:trixie-slim"
 FROZEN_SOURCES="${SOURCE_VOLUME}/build_sources/debian_stable_frozen_direct_clearnet.sources.in"
 
+declare snapshot_label_value=""
+
 ## Resolve base image and validate frozen source prerequisites before pulling
 if [[ "${BUILD_FRESHNESS:-frozen}" == "current" ]]; then
     BASE_IMAGE="${UNFROZEN_BASE_IMAGE}"
+    snapshot_label_value="current"
     echo "Skipping source freeze injection and using unfrozen sources." >&2
 elif [[ -f "${FROZEN_SOURCES}" && -n "${snapshot_ts:-}" ]]; then
     BASE_IMAGE="${PINNED_BASE_IMAGE}"
+    snapshot_label_value="${snapshot_ts}"
     declare formatted_date
     formatted_date=$(date --utc --date="@${snapshot_ts}" '+%Y%m%dT%H%M%SZ')
 else
@@ -54,7 +58,7 @@ buildah config \
     --env DM_UID="${HOST_USER_ID}" \
     --stop-signal SIGRTMIN+3 \
     --cmd "/sbin/init" \
-    --label "${DM_SNAPSHOT_LABEL}=${snapshot_ts:-}" \
+    --label "${DM_SNAPSHOT_LABEL}=${snapshot_label_value}" \
     --label org.opencontainers.image.authors="tabletseeker-git@protonmail.com" \
     --label org.opencontainers.image.description="Containerization of derivative-maker" \
     --label org.opencontainers.image.title="derivative-maker-oci" \

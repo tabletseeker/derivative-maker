@@ -206,10 +206,13 @@ jobs:
           KEY_FILE: "/home/debian/.key_mnt/my-private-key.asc"
           GIT_URL: "${{ github.server_url }}/${{ github.repository }}"
           GIT_BRANCH: ${{ github.ref_name }}
+          INTERACTIVE: "false"
         run: ./.github/scripts/vm-setup.sh
 
       - name: Extract VM Caches
         shell: bash
+        env:
+          UPDATE_APPROX_CACHE: ${{ inputs.update_approx_cache }}
         run: |
           ./.github/scripts/vm-sync-helper.sh save-cache "${GITHUB_WORKSPACE}/approx-cache.tar.zst"
           ./.github/scripts/vm-sync-helper.sh save-oci-image "${GITHUB_WORKSPACE}/oci-image.tar.zst"
